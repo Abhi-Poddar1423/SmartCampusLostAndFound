@@ -171,6 +171,10 @@ public class ManageUsersPanel extends JPanel {
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
+    public void refreshUsers() {
+        loadUsersAsync();
+    }
+
     public void loadUsersAsync() {
         statusLabel.setText("Loading accounts from database...");
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));

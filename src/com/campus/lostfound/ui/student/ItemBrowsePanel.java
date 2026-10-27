@@ -52,6 +52,7 @@ public class ItemBrowsePanel extends JPanel {
 
     private JTextField searchField;
     private JComboBox<String> categoryCombo;
+    private JComboBox<String> buildingCombo;
     private JComboBox<String> typeCombo;
     private JComboBox<String> statusCombo;
     private RoundedButton searchButton;
@@ -71,7 +72,7 @@ public class ItemBrowsePanel extends JPanel {
     public ItemBrowsePanel() {
         this.itemDAO = new ItemDAO();
         initializeUI();
-        loadItemsAsync(null, "ALL", "ALL", "ALL");
+        loadItemsAsync(null, "ALL", "ALL", "ALL", "ALL");
     }
 
     private void initializeUI() {
@@ -99,6 +100,17 @@ public class ItemBrowsePanel extends JPanel {
         categoryCombo.setFont(UITheme.FONT_REGULAR);
         categoryCombo.setPreferredSize(new Dimension(150, 36));
 
+        JLabel bldgLbl = new JLabel("Building:");
+        bldgLbl.setFont(UITheme.FONT_LABEL);
+        List<String> buildings = new ArrayList<>();
+        buildings.add("ALL");
+        for (String b : ReportItemDialog.BUILDINGS) {
+            buildings.add(b);
+        }
+        buildingCombo = new JComboBox<>(buildings.toArray(new String[0]));
+        buildingCombo.setFont(UITheme.FONT_REGULAR);
+        buildingCombo.setPreferredSize(new Dimension(140, 36));
+
         JLabel typeLbl = new JLabel("Type:");
         typeLbl.setFont(UITheme.FONT_LABEL);
         typeCombo = new JComboBox<>(new String[]{"ALL", "LOST", "FOUND"});
@@ -111,7 +123,7 @@ public class ItemBrowsePanel extends JPanel {
         statusCombo.setFont(UITheme.FONT_REGULAR);
         statusCombo.setPreferredSize(new Dimension(110, 36));
 
-        searchButton = new RoundedButton("Filter", RoundedButton.ButtonType.PRIMARY);
+        searchButton = new RoundedButton("Filter", RoundedButton.ButtonType.ACCENT);
         searchButton.setPreferredSize(new Dimension(90, 36));
         searchButton.addActionListener(e -> applyFilters());
 
@@ -126,6 +138,8 @@ public class ItemBrowsePanel extends JPanel {
         filterCard.add(searchField);
         filterCard.add(catLbl);
         filterCard.add(categoryCombo);
+        filterCard.add(bldgLbl);
+        filterCard.add(buildingCombo);
         filterCard.add(typeLbl);
         filterCard.add(typeCombo);
         filterCard.add(statusLbl);
@@ -134,7 +148,7 @@ public class ItemBrowsePanel extends JPanel {
         filterCard.add(resetButton);
 
         // Center Table Panel
-        String[] columnNames = {"ID", "Type", "Title", "Category", "Campus Location", "Status", "Reported By", "Report Date"};
+        String[] columnNames = {"ID", "Photo", "Type", "Title", "Category", "Campus Location", "Status", "Reported By", "Report Date"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -161,8 +175,14 @@ public class ItemBrowsePanel extends JPanel {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     c.setForeground(UITheme.TEXT_PRIMARY);
 
-                    // Color code Type column (index 1)
+                    // Color code Photo indicator (index 1)
                     if (col == 1 && value != null) {
+                        c.setForeground(new Color(37, 99, 235)); // Blue
+                        setFont(getFont().deriveFont(Font.BOLD));
+                    }
+
+                    // Color code Type column (index 2)
+                    if (col == 2 && value != null) {
                         String type = value.toString();
                         if ("LOST".equalsIgnoreCase(type)) {
                             c.setForeground(new Color(220, 38, 38)); // Red
@@ -173,8 +193,8 @@ public class ItemBrowsePanel extends JPanel {
                         }
                     }
 
-                    // Color code Status column (index 5)
-                    if (col == 5 && value != null) {
+                    // Color code Status column (index 6)
+                    if (col == 6 && value != null) {
                         String st = value.toString();
                         if ("OPEN".equalsIgnoreCase(st)) {
                             c.setForeground(new Color(37, 99, 235)); // Blue
@@ -191,13 +211,14 @@ public class ItemBrowsePanel extends JPanel {
 
         // Set column widths
         itemTable.getColumnModel().getColumn(0).setPreferredWidth(45);  // ID
-        itemTable.getColumnModel().getColumn(1).setPreferredWidth(70);  // Type
-        itemTable.getColumnModel().getColumn(2).setPreferredWidth(180); // Title
-        itemTable.getColumnModel().getColumn(3).setPreferredWidth(140); // Category
-        itemTable.getColumnModel().getColumn(4).setPreferredWidth(140); // Location
-        itemTable.getColumnModel().getColumn(5).setPreferredWidth(85);  // Status
-        itemTable.getColumnModel().getColumn(6).setPreferredWidth(120); // Reported By
-        itemTable.getColumnModel().getColumn(7).setPreferredWidth(130); // Date
+        itemTable.getColumnModel().getColumn(1).setPreferredWidth(60);  // Photo
+        itemTable.getColumnModel().getColumn(2).setPreferredWidth(70);  // Type
+        itemTable.getColumnModel().getColumn(3).setPreferredWidth(180); // Title
+        itemTable.getColumnModel().getColumn(4).setPreferredWidth(140); // Category
+        itemTable.getColumnModel().getColumn(5).setPreferredWidth(140); // Location
+        itemTable.getColumnModel().getColumn(6).setPreferredWidth(85);  // Status
+        itemTable.getColumnModel().getColumn(7).setPreferredWidth(120); // Reported By
+        itemTable.getColumnModel().getColumn(8).setPreferredWidth(130); // Date
 
         JScrollPane tableScrollPane = new JScrollPane(itemTable);
         tableScrollPane.setBorder(BorderFactory.createLineBorder(UITheme.BORDER, 1));
@@ -217,7 +238,7 @@ public class ItemBrowsePanel extends JPanel {
         JPanel buttonBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 4));
         buttonBar.setOpaque(false);
 
-        claimButton = new RoundedButton("Claim Found Item", RoundedButton.ButtonType.PRIMARY);
+        claimButton = new RoundedButton("Claim Found Item", RoundedButton.ButtonType.ACCENT);
         claimButton.setEnabled(false);
         claimButton.addActionListener(e -> handleClaimAction());
 
@@ -250,31 +271,38 @@ public class ItemBrowsePanel extends JPanel {
         applyFilters();
     }
 
+    public void searchWithKeyword(String query) {
+        searchField.setText(query != null ? query : "");
+        applyFilters();
+    }
+
     private void applyFilters() {
         String keyword = searchField.getText().trim();
         String category = (String) categoryCombo.getSelectedItem();
+        String building = (String) buildingCombo.getSelectedItem();
         String itemType = (String) typeCombo.getSelectedItem();
         String status = (String) statusCombo.getSelectedItem();
 
-        loadItemsAsync(keyword, category, itemType, status);
+        loadItemsAsync(keyword, category, building, itemType, status);
     }
 
     private void resetFilters() {
         searchField.setText("");
         categoryCombo.setSelectedIndex(0);
+        buildingCombo.setSelectedIndex(0);
         typeCombo.setSelectedIndex(0);
         statusCombo.setSelectedIndex(0);
-        loadItemsAsync(null, "ALL", "ALL", "ALL");
+        loadItemsAsync(null, "ALL", "ALL", "ALL", "ALL");
     }
 
-    private void loadItemsAsync(String keyword, String category, String itemType, String status) {
+    private void loadItemsAsync(String keyword, String category, String building, String itemType, String status) {
         statusLabel.setText("Searching items from database...");
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
         new SwingWorker<List<Item>, Void>() {
             @Override
             protected List<Item> doInBackground() {
-                return itemDAO.searchItems(keyword, category, itemType, status);
+                return itemDAO.searchItems(keyword, category, building, itemType, status);
             }
 
             @Override
@@ -296,9 +324,11 @@ public class ItemBrowsePanel extends JPanel {
         for (Item item : items) {
             String dateStr = item.getReportDate() != null ? dateFormat.format(item.getReportDate()) : "N/A";
             String reporter = item.getReporterName() != null ? item.getReporterName() : "Student #" + item.getReportedBy();
+            String photoInd = (item.getImagePath() != null && !item.getImagePath().trim().isEmpty()) ? "📷" : "—";
 
             tableModel.addRow(new Object[]{
                     item.getItemId(),
+                    photoInd,
                     item.getItemType(),
                     item.getTitle(),
                     item.getCategory() != null ? item.getCategory() : "N/A",

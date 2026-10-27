@@ -155,8 +155,16 @@ public class RoundedButton extends JButton {
         }
 
         // Fill background
-        g2.setColor(currentBg);
-        g2.fillRoundRect(0, 0, width, height, cornerRadius, cornerRadius);
+        if (buttonType == ButtonType.ACCENT && isEnabled()) {
+            Color start = isPressed ? UITheme.ACCENT_PRESSED : (isHovered ? UITheme.ACCENT_LIGHT : UITheme.ACCENT);
+            Color end = isPressed ? UITheme.PRIMARY : (isHovered ? UITheme.ACCENT : new Color(15, 118, 110));
+            java.awt.GradientPaint gp = new java.awt.GradientPaint(0, 0, start, width, height, end);
+            g2.setPaint(gp);
+            g2.fillRoundRect(0, 0, width, height, cornerRadius, cornerRadius);
+        } else {
+            g2.setColor(currentBg);
+            g2.fillRoundRect(0, 0, width, height, cornerRadius, cornerRadius);
+        }
 
         // Draw border for OUTLINE type
         if (buttonType == ButtonType.OUTLINE) {

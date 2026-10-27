@@ -194,6 +194,10 @@ public class MyReportedItemsPanel extends JPanel {
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
+    public void refreshItems() {
+        loadUserItems();
+    }
+
     public void loadUserItems() {
         int currentUserId = SessionManager.getInstance().getUserId();
         if (currentUserId <= 0) return;

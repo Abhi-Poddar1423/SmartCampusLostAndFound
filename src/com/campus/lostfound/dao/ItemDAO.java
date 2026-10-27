@@ -165,14 +165,23 @@ public class ItemDAO {
 
     /**
      * Dynamic search and filter across reported items.
+     * Legacy compatible: defaults building to "ALL".
+     */
+    public List<Item> searchItems(String keyword, String category, String itemType, String status) {
+        return searchItems(keyword, category, "ALL", itemType, status);
+    }
+
+    /**
+     * Extended dynamic search and filter across reported items including building.
      * 
-     * @param keyword Partial match on title, description, or location (pass null or empty to ignore)
+     * @param keyword Partial match on title, description, location, building, or floor/room
      * @param category Exact match category (pass null or "ALL" to ignore)
+     * @param building Exact match building (pass null or "ALL" to ignore)
      * @param itemType Exact match on 'LOST' or 'FOUND' (pass null or "ALL" to ignore)
      * @param status Exact match on 'OPEN', 'CLAIMED', or 'RETURNED' (pass null or "ALL" to ignore)
      * @return Filtered list of items
      */
-    public List<Item> searchItems(String keyword, String category, String itemType, String status) {
+    public List<Item> searchItems(String keyword, String category, String building, String itemType, String status) {
         List<Item> items = new ArrayList<>();
         try (Connection conn = DBConnection.getConnection()) {
             boolean v2 = areV2ColumnsPresent(conn);
@@ -186,16 +195,31 @@ public class ItemDAO {
             List<Object> params = new ArrayList<>();
 
             if (keyword != null && !keyword.trim().isEmpty()) {
-                sql.append("AND (LOWER(i.title) LIKE ? OR LOWER(i.description) LIKE ? OR LOWER(i.location) LIKE ?) ");
-                String kwParam = "%" + keyword.trim().toLowerCase() + "%";
-                params.add(kwParam);
-                params.add(kwParam);
-                params.add(kwParam);
+                if (v2) {
+                    sql.append("AND (LOWER(i.title) LIKE ? OR LOWER(i.description) LIKE ? OR LOWER(i.location) LIKE ? OR LOWER(i.building) LIKE ? OR LOWER(i.floor_room) LIKE ?) ");
+                    String kwParam = "%" + keyword.trim().toLowerCase() + "%";
+                    params.add(kwParam);
+                    params.add(kwParam);
+                    params.add(kwParam);
+                    params.add(kwParam);
+                    params.add(kwParam);
+                } else {
+                    sql.append("AND (LOWER(i.title) LIKE ? OR LOWER(i.description) LIKE ? OR LOWER(i.location) LIKE ?) ");
+                    String kwParam = "%" + keyword.trim().toLowerCase() + "%";
+                    params.add(kwParam);
+                    params.add(kwParam);
+                    params.add(kwParam);
+                }
             }
 
             if (category != null && !category.trim().isEmpty() && !category.equalsIgnoreCase("ALL")) {
                 sql.append("AND i.category = ? ");
                 params.add(category.trim());
+            }
+
+            if (v2 && building != null && !building.trim().isEmpty() && !building.equalsIgnoreCase("ALL")) {
+                sql.append("AND i.building = ? ");
+                params.add(building.trim());
             }
 
             if (itemType != null && !itemType.trim().isEmpty() && !itemType.equalsIgnoreCase("ALL")) {

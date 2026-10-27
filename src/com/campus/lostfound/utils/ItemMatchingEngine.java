@@ -12,7 +12,7 @@ import java.util.*;
  * Calculates similarity between a target report and eligible opposite-type candidate reports.
  * 
  * Key Principles:
- * 1. Pure Java (No external AI APIs or cloud dependencies).
+ * 1. Pure Java deterministic algorithm (no cloud or external service dependencies).
  * 2. Fully explainable: Every score breakdown is transparent (Category 40%, Location 25%, Text 35%).
  * 3. Never presents score as a probability of identical identity; labeled as "Match Score".
  * 4. Deterministic: Given the same target and candidate data, always produces identical scores.

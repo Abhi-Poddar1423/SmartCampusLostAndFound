@@ -25,32 +25,39 @@ import java.awt.RenderingHints;
  */
 public class UITheme {
 
-    // Primary Brand Colors (Deep Navy / Indigo)
-    public static final Color PRIMARY = new Color(30, 58, 138);         // #1E3A8A
-    public static final Color PRIMARY_HOVER = new Color(41, 74, 172);   // Slightly lighter on hover
-    public static final Color PRIMARY_PRESSED = new Color(23, 45, 107); // Darker on click
+    // Primary Brand Colors (Deep Navy / Dark Blue)
+    public static final Color PRIMARY = new Color(16, 42, 67);           // #102A43 Deep Navy
+    public static final Color PRIMARY_LIGHT = new Color(23, 59, 99);     // #173B63 Dark Blue
+    public static final Color PRIMARY_HOVER = new Color(30, 75, 122);
+    public static final Color PRIMARY_PRESSED = new Color(11, 30, 48);
 
-    // Accent / Secondary Colors (Teal / Cyan)
-    public static final Color ACCENT = new Color(13, 148, 136);         // #0D9488
+    // Accent / Secondary Colors (Teal & Bright Teal)
+    public static final Color ACCENT = new Color(13, 148, 136);          // #0D9488 Teal
+    public static final Color ACCENT_LIGHT = new Color(20, 184, 166);    // #14B8A6 Bright Teal
     public static final Color ACCENT_HOVER = new Color(15, 168, 155);
+    public static final Color ACCENT_PRESSED = new Color(11, 120, 110);
 
     // Neutral & Background Colors
-    public static final Color BG_MAIN = new Color(241, 245, 249);       // #F1F5F9 (Soft campus gray)
-    public static final Color BG_CARD = Color.WHITE;                    // Pure white card background
-    public static final Color BORDER = new Color(226, 232, 240);        // #E2E8F0 (Subtle borders)
-    public static final Color BORDER_FOCUS = new Color(59, 130, 246);   // #3B82F6 (Blue focus border)
+    public static final Color BG_MAIN = new Color(243, 247, 251);        // #F3F7FB Background
+    public static final Color BG_CARD = Color.WHITE;                     // #FFFFFF Card Background
+    public static final Color BG_SIDEBAR = new Color(16, 42, 67);        // #102A43 Deep Navy Sidebar
+    public static final Color BORDER = new Color(220, 229, 239);         // #DCE5EF Borders
+    public static final Color BORDER_FOCUS = new Color(13, 148, 136);    // Teal Focus Border
 
     // Text Colors
-    public static final Color TEXT_PRIMARY = new Color(15, 23, 42);     // #0F172A (Deep dark slate)
-    public static final Color TEXT_SECONDARY = new Color(100, 116, 139);// #64748B (Muted subtitle text)
+    public static final Color TEXT_PRIMARY = new Color(24, 49, 83);      // #183153 Primary Text
+    public static final Color TEXT_SECONDARY = new Color(100, 116, 139); // #64748B Secondary Text
+    public static final Color TEXT_MUTED = new Color(148, 163, 184);     // #94A3B8
     public static final Color TEXT_LIGHT = Color.WHITE;
 
     // Status Colors
-    public static final Color SUCCESS = new Color(22, 163, 74);         // #16A34A (Green)
-    public static final Color DANGER = new Color(220, 38, 38);          // #DC2626 (Red)
-    public static final Color WARNING = new Color(217, 119, 6);         // #D97706 (Amber)
+    public static final Color SUCCESS = new Color(16, 185, 129);         // #10B981 (Modern Emerald)
+    public static final Color DANGER = new Color(239, 68, 68);           // #EF4444 (Clean Red)
+    public static final Color WARNING = new Color(245, 158, 11);         // #F59E0B (Amber Gold)
+    public static final Color INFO = new Color(59, 130, 246);            // #3B82F6 (Blue)
 
     // Typography
+    public static final Font FONT_HERO = new Font("Segoe UI", Font.BOLD, 28);
     public static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 22);
     public static final Font FONT_SUBTITLE = new Font("Segoe UI", Font.PLAIN, 14);
     public static final Font FONT_HEADER = new Font("Segoe UI", Font.BOLD, 16);
@@ -58,6 +65,7 @@ public class UITheme {
     public static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 14);
     public static final Font FONT_SMALL = new Font("Segoe UI", Font.PLAIN, 12);
     public static final Font FONT_LABEL = new Font("Segoe UI", Font.BOLD, 13);
+    public static final Font FONT_TAGLINE = new Font("Segoe UI", Font.ITALIC, 13);
 
     /**
      * Initializes the modern FlatLaf Look and Feel.
@@ -69,6 +77,9 @@ public class UITheme {
             UIManager.put("Button.arc", 10);
             UIManager.put("Component.arc", 8);
             UIManager.put("TextComponent.arc", 8);
+            UIManager.put("Component.focusWidth", 1);
+            UIManager.put("Component.focusColor", ACCENT);
+            UIManager.put("Component.focusedBorderColor", ACCENT);
             UIManager.put("ScrollBar.thumbArc", 999);
         } catch (Throwable t) {
             try {
@@ -85,8 +96,12 @@ public class UITheme {
         tf.setFont(FONT_REGULAR);
         tf.setForeground(TEXT_PRIMARY);
         tf.setCaretColor(TEXT_PRIMARY);
-        tf.setPreferredSize(new Dimension(tf.getPreferredSize().width, 38));
-        tf.setBorder(createFieldBorder());
+        tf.setPreferredSize(new Dimension(tf.getPreferredSize().width, 40));
+        if (UIManager.getLookAndFeel().getClass().getName().contains("Flat")) {
+            tf.putClientProperty("JComponent.roundRect", true);
+        } else {
+            tf.setBorder(createFieldBorder());
+        }
         return tf;
     }
 
@@ -98,8 +113,13 @@ public class UITheme {
         pf.setFont(FONT_REGULAR);
         pf.setForeground(TEXT_PRIMARY);
         pf.setCaretColor(TEXT_PRIMARY);
-        pf.setPreferredSize(new Dimension(pf.getPreferredSize().width, 38));
-        pf.setBorder(createFieldBorder());
+        pf.setPreferredSize(new Dimension(pf.getPreferredSize().width, 40));
+        if (UIManager.getLookAndFeel().getClass().getName().contains("Flat")) {
+            pf.putClientProperty("JComponent.roundRect", true);
+            pf.putClientProperty("JPasswordField.showRevealButton", true);
+        } else {
+            pf.setBorder(createFieldBorder());
+        }
         return pf;
     }
 
@@ -121,6 +141,59 @@ public class UITheme {
         label.setFont(FONT_LABEL);
         label.setForeground(TEXT_PRIMARY);
         return label;
+    }
+
+    /**
+     * Creates a small rounded decorative accent line.
+     */
+    public static JPanel createAccentBar(int width, int height) {
+        JPanel bar = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(ACCENT);
+                g2.fillRoundRect(0, 0, width, height, height, height);
+                g2.dispose();
+            }
+        };
+        bar.setOpaque(false);
+        bar.setPreferredSize(new Dimension(width, height + 2));
+        bar.setMaximumSize(new Dimension(width, height + 2));
+        return bar;
+    }
+
+    /**
+     * Creates a rounded card panel with an elevated soft shadow border.
+     */
+    public static JPanel createElevatedCardPanel(int cornerRadius) {
+        return new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int w = getWidth();
+                int h = getHeight();
+
+                // Subtle soft outer glow / drop shadow simulation
+                g2.setColor(new Color(16, 42, 67, 8));
+                g2.fillRoundRect(2, 3, w - 4, h - 3, cornerRadius + 2, cornerRadius + 2);
+                g2.setColor(new Color(16, 42, 67, 12));
+                g2.fillRoundRect(1, 2, w - 2, h - 2, cornerRadius + 1, cornerRadius + 1);
+
+                // Card surface
+                g2.setColor(BG_CARD);
+                g2.fillRoundRect(0, 0, w - 1, h - 2, cornerRadius, cornerRadius);
+
+                // Fine border
+                g2.setColor(BORDER);
+                g2.drawRoundRect(0, 0, w - 2, h - 3, cornerRadius, cornerRadius);
+
+                g2.dispose();
+            }
+        };
     }
 
     /**

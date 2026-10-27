@@ -2,6 +2,7 @@ package com.campus.lostfound.ui.student;
 
 import com.campus.lostfound.dao.ItemDAO;
 import com.campus.lostfound.models.Item;
+import com.campus.lostfound.ui.common.CampusIcons;
 import com.campus.lostfound.ui.common.RoundedButton;
 import com.campus.lostfound.ui.common.UITheme;
 import com.campus.lostfound.utils.ImageUtil;
@@ -21,6 +22,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -29,24 +31,30 @@ import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.io.File;
 
 /**
  * ReportItemDialog
  * 
- * Dialog allowing students to report lost or found items on campus.
- * Supports extended location details (Building, Floor/Room) and optional item photo upload.
- * Performs validation, saves via ItemDAO on a background thread using SwingWorker,
- * and notifies the parent panel to refresh upon success.
+ * Clean, properly fitted reporting dialog for campus lost & found items.
+ * Layout improvements:
+ * - Fits cleanly within standard laptop resolutions without taskbar overflow.
+ * - Sticky bottom action bar with Cancel & Submit always visible.
+ * - Strictly prevents horizontal scrolling (VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER).
+ * - Compact photo preview with side-by-side controls and aspect ratio preservation.
  */
 public class ReportItemDialog extends JDialog {
 
     public static final String[] CATEGORIES = {
         "Electronics & Gadgets",
-        "Student ID & Cards",
+        "ID Cards & Documents",
+        "Keys & Access Cards",
         "Books & Stationery",
         "Bags & Backpacks",
-        "Keys & Keychains",
         "Clothing & Accessories",
         "Water Bottles",
         "Wallets & Purses",
@@ -96,13 +104,15 @@ public class ReportItemDialog extends JDialog {
     }
 
     private void initializeUI() {
-        setSize(520, 720);
-        setMinimumSize(new Dimension(480, 600));
+        setSize(550, 620);
+        setMinimumSize(new Dimension(480, 520));
         setLocationRelativeTo(getParent());
         getContentPane().setBackground(UITheme.BG_MAIN);
         setLayout(new BorderLayout());
 
-        // Header Panel
+        // ==========================================
+        // 1. COMPACT NAVY HEADER PANEL
+        // ==========================================
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setBackground(UITheme.PRIMARY);
@@ -112,7 +122,7 @@ public class ReportItemDialog extends JDialog {
         titleLabel.setFont(UITheme.FONT_TITLE);
         titleLabel.setForeground(UITheme.TEXT_LIGHT);
 
-        JLabel subtitleLabel = new JLabel("Provide accurate details and photos to help locate or return the item");
+        JLabel subtitleLabel = new JLabel("Provide accurate details to help locate or return the item");
         subtitleLabel.setFont(UITheme.FONT_SMALL);
         subtitleLabel.setForeground(new Color(224, 231, 255));
 
@@ -120,47 +130,82 @@ public class ReportItemDialog extends JDialog {
         headerPanel.add(Box.createVerticalStrut(4));
         headerPanel.add(subtitleLabel);
 
-        // Content Card Panel
-        JPanel card = UITheme.createCardPanel(12);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(BorderFactory.createEmptyBorder(16, 20, 16, 20));
+        // ==========================================
+        // 2. FORM CONTENT PANEL (INSIDE SCROLL PANE)
+        // ==========================================
+        JPanel formContainer = new JPanel(new GridBagLayout());
+        formContainer.setBackground(Color.WHITE);
+        formContainer.setBorder(BorderFactory.createEmptyBorder(18, 24, 18, 24));
 
-        // 1. Report Type (LOST or FOUND)
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 0, 4, 0);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        gbc.gridx = 0;
+        int row = 0;
+
+        // 1. Report Type
         JLabel typeLabel = UITheme.createFieldLabel("What would you like to report? *");
         typeComboBox = new JComboBox<>(new Item.ItemType[]{Item.ItemType.LOST, Item.ItemType.FOUND});
         typeComboBox.setFont(UITheme.FONT_REGULAR);
         typeComboBox.setPreferredSize(new Dimension(typeComboBox.getPreferredSize().width, 36));
-        typeComboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+
+        gbc.gridy = row++;
+        formContainer.add(typeLabel, gbc);
+        gbc.gridy = row++;
+        formContainer.add(typeComboBox, gbc);
 
         // 2. Item Title
         JLabel itemTitleLabel = UITheme.createFieldLabel("Item Name / Title *");
         titleField = UITheme.createTextField(20);
-        titleField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+
+        gbc.gridy = row++;
+        gbc.insets = new Insets(8, 0, 4, 0);
+        formContainer.add(itemTitleLabel, gbc);
+        gbc.gridy = row++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        formContainer.add(titleField, gbc);
 
         // 3. Category
         JLabel categoryLabel = UITheme.createFieldLabel("Category *");
         categoryComboBox = new JComboBox<>(CATEGORIES);
         categoryComboBox.setFont(UITheme.FONT_REGULAR);
         categoryComboBox.setPreferredSize(new Dimension(categoryComboBox.getPreferredSize().width, 36));
-        categoryComboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
 
-        // 4. Building & Floor/Room
+        gbc.gridy = row++;
+        gbc.insets = new Insets(8, 0, 4, 0);
+        formContainer.add(categoryLabel, gbc);
+        gbc.gridy = row++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        formContainer.add(categoryComboBox, gbc);
+
+        // 4. Campus Building & Floor/Room
         JLabel buildingLabel = UITheme.createFieldLabel("Campus Building *");
         buildingComboBox = new JComboBox<>(BUILDINGS);
         buildingComboBox.setFont(UITheme.FONT_REGULAR);
         buildingComboBox.setPreferredSize(new Dimension(buildingComboBox.getPreferredSize().width, 36));
-        buildingComboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
 
-        JLabel floorRoomLabel = UITheme.createFieldLabel("Floor / Room / Area (e.g. 2nd Floor, Room 204, Reading Hall)");
+        gbc.gridy = row++;
+        gbc.insets = new Insets(8, 0, 4, 0);
+        formContainer.add(buildingLabel, gbc);
+        gbc.gridy = row++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        formContainer.add(buildingComboBox, gbc);
+
+        JLabel floorRoomLabel = UITheme.createFieldLabel("Floor / Room / Specific Area");
         floorRoomField = UITheme.createTextField(20);
-        floorRoomField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
 
-        // 5. Full Location (auto-populated and editable)
+        gbc.gridy = row++;
+        gbc.insets = new Insets(8, 0, 4, 0);
+        formContainer.add(floorRoomLabel, gbc);
+        gbc.gridy = row++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        formContainer.add(floorRoomField, gbc);
+
+        // 5. Location Summary (Auto-updating)
         JLabel locationLabel = UITheme.createFieldLabel("Campus Location Summary *");
         locationField = UITheme.createTextField(20);
-        locationField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
 
-        // Auto-update locationField when building or floorRoom changes
         buildingComboBox.addActionListener(e -> updateLocationSummary());
         floorRoomField.addKeyListener(new java.awt.event.KeyAdapter() {
             @Override
@@ -170,14 +215,21 @@ public class ReportItemDialog extends JDialog {
         });
         updateLocationSummary();
 
+        gbc.gridy = row++;
+        gbc.insets = new Insets(8, 0, 4, 0);
+        formContainer.add(locationLabel, gbc);
+        gbc.gridy = row++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        formContainer.add(locationField, gbc);
+
         // 6. Photo Upload Section
         JLabel photoSectionLabel = UITheme.createFieldLabel("Item Photo (Optional — JPG, PNG up to 5MB)");
-        JPanel photoRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+
+        JPanel photoRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         photoRow.setOpaque(false);
-        photoRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
 
         photoPreviewLabel = new JLabel("No Photo", SwingConstants.CENTER);
-        photoPreviewLabel.setPreferredSize(new Dimension(64, 64));
+        photoPreviewLabel.setPreferredSize(new Dimension(68, 68));
         photoPreviewLabel.setFont(UITheme.FONT_SMALL);
         photoPreviewLabel.setForeground(UITheme.TEXT_SECONDARY);
         photoPreviewLabel.setBorder(BorderFactory.createLineBorder(UITheme.BORDER, 1));
@@ -188,15 +240,17 @@ public class ReportItemDialog extends JDialog {
         photoButtonsPanel.setLayout(new BoxLayout(photoButtonsPanel, BoxLayout.Y_AXIS));
         photoButtonsPanel.setOpaque(false);
 
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         btnRow.setOpaque(false);
 
         selectPhotoButton = new RoundedButton("Choose Photo...", RoundedButton.ButtonType.SECONDARY);
         selectPhotoButton.setFont(UITheme.FONT_SMALL);
+        selectPhotoButton.setPreferredSize(new Dimension(135, 34));
         selectPhotoButton.addActionListener(e -> handleSelectPhoto());
 
         removePhotoButton = new RoundedButton("Remove", RoundedButton.ButtonType.OUTLINE);
         removePhotoButton.setFont(UITheme.FONT_SMALL);
+        removePhotoButton.setPreferredSize(new Dimension(85, 34));
         removePhotoButton.setEnabled(false);
         removePhotoButton.addActionListener(e -> handleRemovePhoto());
 
@@ -206,7 +260,7 @@ public class ReportItemDialog extends JDialog {
         photoNameLabel = new JLabel("No file selected");
         photoNameLabel.setFont(UITheme.FONT_SMALL);
         photoNameLabel.setForeground(UITheme.TEXT_SECONDARY);
-        photoNameLabel.setBorder(BorderFactory.createEmptyBorder(4, 6, 0, 0));
+        photoNameLabel.setBorder(BorderFactory.createEmptyBorder(6, 6, 0, 0));
 
         photoButtonsPanel.add(btnRow);
         photoButtonsPanel.add(photoNameLabel);
@@ -214,86 +268,71 @@ public class ReportItemDialog extends JDialog {
         photoRow.add(photoPreviewLabel);
         photoRow.add(photoButtonsPanel);
 
-        // 7. Detailed Description
-        JLabel descLabel = UITheme.createFieldLabel("Description (Color, brand, identifying marks)");
+        gbc.gridy = row++;
+        gbc.insets = new Insets(8, 0, 4, 0);
+        formContainer.add(photoSectionLabel, gbc);
+        gbc.gridy = row++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        formContainer.add(photoRow, gbc);
+
+        // 7. Description
+        JLabel descLabel = UITheme.createFieldLabel("Description (Color, brand, distinguishing marks)");
         descriptionArea = new JTextArea(3, 20);
         descriptionArea.setFont(UITheme.FONT_REGULAR);
         descriptionArea.setLineWrap(true);
         descriptionArea.setWrapStyleWord(true);
         JScrollPane descScrollPane = new JScrollPane(descriptionArea);
         descScrollPane.setBorder(UITheme.createFieldBorder());
-        descScrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
+        descScrollPane.setPreferredSize(new Dimension(100, 75));
 
-        // Status / Error message
+        gbc.gridy = row++;
+        gbc.insets = new Insets(8, 0, 4, 0);
+        formContainer.add(descLabel, gbc);
+        gbc.gridy = row++;
+        gbc.insets = new Insets(4, 0, 8, 0);
+        formContainer.add(descScrollPane, gbc);
+
+        // Wrap form in ScrollPane (vertical only, horizontal strictly never)
+        JScrollPane scrollPane = new JScrollPane(formContainer);
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(14);
+        scrollPane.setBorder(null);
+
+        // ==========================================
+        // 3. STICKY DEDICATED BOTTOM ACTION BAR
+        // ==========================================
+        JPanel bottomActionPanel = new JPanel(new BorderLayout(12, 0));
+        bottomActionPanel.setBackground(Color.WHITE);
+        bottomActionPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, UITheme.BORDER),
+                BorderFactory.createEmptyBorder(12, 20, 12, 20)
+        ));
+
         statusLabel = new JLabel(" ");
         statusLabel.setFont(UITheme.FONT_SMALL);
         statusLabel.setForeground(UITheme.DANGER);
-        statusLabel.setAlignmentX(LEFT_ALIGNMENT);
 
-        // Add fields to card
-        card.add(typeLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(typeComboBox);
-        card.add(Box.createVerticalStrut(8));
-
-        card.add(itemTitleLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(titleField);
-        card.add(Box.createVerticalStrut(8));
-
-        card.add(categoryLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(categoryComboBox);
-        card.add(Box.createVerticalStrut(8));
-
-        card.add(buildingLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(buildingComboBox);
-        card.add(Box.createVerticalStrut(8));
-
-        card.add(floorRoomLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(floorRoomField);
-        card.add(Box.createVerticalStrut(8));
-
-        card.add(locationLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(locationField);
-        card.add(Box.createVerticalStrut(8));
-
-        card.add(photoSectionLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(photoRow);
-        card.add(Box.createVerticalStrut(8));
-
-        card.add(descLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(descScrollPane);
-        card.add(Box.createVerticalStrut(6));
-        card.add(statusLabel);
-
-        // Footer Actions
-        JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
-        footerPanel.setBackground(UITheme.BG_MAIN);
+        JPanel buttonBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonBar.setOpaque(false);
 
         cancelButton = new RoundedButton("Cancel", RoundedButton.ButtonType.OUTLINE);
+        cancelButton.setPreferredSize(new Dimension(100, 38));
         cancelButton.addActionListener(e -> dispose());
 
-        submitButton = new RoundedButton("Submit Report", RoundedButton.ButtonType.PRIMARY);
+        submitButton = new RoundedButton("Submit Report", RoundedButton.ButtonType.ACCENT);
+        submitButton.setPreferredSize(new Dimension(145, 38));
         submitButton.addActionListener(e -> handleSubmitReport());
 
-        footerPanel.add(cancelButton);
-        footerPanel.add(submitButton);
+        buttonBar.add(cancelButton);
+        buttonBar.add(submitButton);
 
-        // Wrapper scroll pane for comfortable scrolling
-        JScrollPane scrollPane = new JScrollPane(card);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-        scrollPane.getVerticalScrollBar().setUnitIncrement(14);
-        scrollPane.getViewport().setBackground(UITheme.BG_MAIN);
+        bottomActionPanel.add(statusLabel, BorderLayout.CENTER);
+        bottomActionPanel.add(buttonBar, BorderLayout.EAST);
 
         add(headerPanel, BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);
-        add(footerPanel, BorderLayout.SOUTH);
+        add(bottomActionPanel, BorderLayout.SOUTH);
     }
 
     private void updateLocationSummary() {
@@ -320,7 +359,7 @@ public class ReportItemDialog extends JDialog {
             try {
                 ImageUtil.validateImageFile(file);
                 selectedPhotoFile = file;
-                ImageIcon thumb = ImageUtil.createThumbnail(file, 64, 64);
+                ImageIcon thumb = ImageUtil.createThumbnail(file, 68, 68);
                 if (thumb != null) {
                     photoPreviewLabel.setText("");
                     photoPreviewLabel.setIcon(thumb);
@@ -357,7 +396,6 @@ public class ReportItemDialog extends JDialog {
         String building = (String) buildingComboBox.getSelectedItem();
         String floorRoom = floorRoomField.getText().trim();
 
-        // Fallback for location if empty
         if (location.isEmpty()) {
             if (building != null && !building.equalsIgnoreCase("Other")) {
                 location = building + (!floorRoom.isEmpty() ? " - " + floorRoom : "");
@@ -366,7 +404,6 @@ public class ReportItemDialog extends JDialog {
             }
         }
 
-        // Validation
         if (title.isEmpty()) {
             statusLabel.setText("Please enter an item name/title.");
             titleField.requestFocusInWindow();
@@ -396,7 +433,6 @@ public class ReportItemDialog extends JDialog {
         final String finalLocation = location;
         final File photoToUpload = selectedPhotoFile;
 
-        // Save item via ItemDAO asynchronously
         new SwingWorker<Boolean, Void>() {
             private String errorMessage = "";
 
@@ -461,24 +497,6 @@ public class ReportItemDialog extends JDialog {
         }.execute();
     }
 
-    /**
-     * Safely deletes an image created during the current submission attempt
-     * if the database operation fails or encounters an exception.
-     * 
-     * Security & Ownership Controls:
-     * 1. Reliable Current-Attempt Ownership: verifies that the target path and file identity key
-     *    strictly match the exact file atomically created via CREATE_NEW by ImageUtil.saveItemImageResult().
-     *    Eliminates reliance on timestamps or filename patterns as proof of ownership.
-     * 2. Reparse Point & Symlink Defense: checks LinkOption.NOFOLLOW_LINKS attributes on the target file
-     *    and its parent directory. If isSymbolicLink() or isOther() (junction/reparse-point) is detected,
-     *    cleanup aborts immediately without traversing links.
-     * 3. Canonical Hierarchy Assertion: verifies targetPath.getParent().toRealPath() strictly equals
-     *    the canonical uploads/items/ directory.
-     * 4. Error Isolation: logs failures to System.err without modifying the SwingWorker errorMessage.
-     *    deleteOnExit() is registered solely as a non-guaranteed fallback if immediate deletion fails.
-     *
-     * @param savedResult Immutable tracking metadata from ImageUtil.saveItemImageResult()
-     */
     private void cleanupSavedImage(ImageUtil.SavedImageResult savedResult) {
         if (savedResult == null || savedResult.getTargetPath() == null || savedResult.getFileKey() == null) {
             return;
@@ -488,14 +506,12 @@ public class ReportItemDialog extends JDialog {
             java.nio.file.Path targetPath = savedResult.getTargetPath().toAbsolutePath().normalize();
             java.nio.file.Path uploadDir = ImageUtil.getUploadDirectory().toAbsolutePath().normalize();
 
-            // 1. Direct Parent Check (Before Link Resolution)
             java.nio.file.Path parentPath = targetPath.getParent();
             if (parentPath == null || !parentPath.equals(uploadDir)) {
                 System.err.println("[ReportItemDialog] Security alert: Cleanup target is not a direct child of upload directory.");
                 return;
             }
 
-            // 2. Pre-Resolution Symlink & Reparse-Point / Junction Checks (NOFOLLOW_LINKS)
             java.nio.file.attribute.BasicFileAttributes targetAttrs =
                     java.nio.file.Files.readAttributes(targetPath, java.nio.file.attribute.BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
 
@@ -512,7 +528,6 @@ public class ReportItemDialog extends JDialog {
                 return;
             }
 
-            // 3. Exact File Identity Verification (Ensures file was not replaced or substituted)
             Object currentKey = targetAttrs.fileKey();
             if (currentKey == null) {
                 currentKey = targetPath.toRealPath().toString() + ":" + targetAttrs.creationTime().toMillis() + ":" + targetAttrs.size();
@@ -523,7 +538,6 @@ public class ReportItemDialog extends JDialog {
                 return;
             }
 
-            // 4. Canonical Path Hierarchy Verification
             java.nio.file.Path canonicalUploadDir = uploadDir.toRealPath();
             java.nio.file.Path canonicalTarget = targetPath.toRealPath();
 
@@ -534,7 +548,6 @@ public class ReportItemDialog extends JDialog {
                 return;
             }
 
-            // 5. Immediate Deletion with Non-guaranteed Fallback
             try {
                 java.nio.file.Files.delete(canonicalTarget);
             } catch (java.io.IOException deleteEx) {
@@ -544,7 +557,6 @@ public class ReportItemDialog extends JDialog {
             }
 
         } catch (Exception cleanupEx) {
-            // Keep original database error intact
             System.err.println("[ReportItemDialog] Warning: Exception during orphaned image cleanup: " + cleanupEx.getMessage());
         }
     }

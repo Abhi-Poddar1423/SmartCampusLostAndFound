@@ -45,6 +45,7 @@ public class ManageItemsPanel extends JPanel {
 
     private JTextField searchField;
     private JComboBox<String> categoryCombo;
+    private JComboBox<String> buildingCombo;
     private JComboBox<String> typeCombo;
     private JComboBox<String> statusCombo;
     private RoundedButton searchButton;
@@ -65,7 +66,7 @@ public class ManageItemsPanel extends JPanel {
         this.itemDAO = new ItemDAO();
         this.onDataChangedCallback = onDataChangedCallback;
         initializeUI();
-        loadItemsAsync(null, "ALL", "ALL", "ALL");
+        loadItemsAsync(null, "ALL", "ALL", "ALL", "ALL");
     }
 
     private void initializeUI() {
@@ -93,6 +94,17 @@ public class ManageItemsPanel extends JPanel {
         categoryCombo.setFont(UITheme.FONT_REGULAR);
         categoryCombo.setPreferredSize(new Dimension(140, 36));
 
+        JLabel bldgLbl = new JLabel("Building:");
+        bldgLbl.setFont(UITheme.FONT_LABEL);
+        List<String> buildings = new ArrayList<>();
+        buildings.add("ALL");
+        for (String b : ReportItemDialog.BUILDINGS) {
+            buildings.add(b);
+        }
+        buildingCombo = new JComboBox<>(buildings.toArray(new String[0]));
+        buildingCombo.setFont(UITheme.FONT_REGULAR);
+        buildingCombo.setPreferredSize(new Dimension(140, 36));
+
         JLabel typeLbl = new JLabel("Type:");
         typeLbl.setFont(UITheme.FONT_LABEL);
         typeCombo = new JComboBox<>(new String[]{"ALL", "LOST", "FOUND"});
@@ -119,6 +131,8 @@ public class ManageItemsPanel extends JPanel {
         filterCard.add(searchField);
         filterCard.add(catLbl);
         filterCard.add(categoryCombo);
+        filterCard.add(bldgLbl);
+        filterCard.add(buildingCombo);
         filterCard.add(typeLbl);
         filterCard.add(typeCombo);
         filterCard.add(statusLbl);
@@ -127,7 +141,7 @@ public class ManageItemsPanel extends JPanel {
         filterCard.add(resetButton);
 
         // Center Table
-        String[] columns = {"ID", "Type", "Title", "Category", "Campus Location", "Status", "Reported By", "Date Reported"};
+        String[] columns = {"ID", "Photo", "Type", "Title", "Category", "Campus Location", "Status", "Reported By", "Date Reported"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int col) {
@@ -155,9 +169,13 @@ public class ManageItemsPanel extends JPanel {
 
                     if (col == 1 && val != null) {
                         setFont(getFont().deriveFont(Font.BOLD));
+                        c.setForeground(new Color(37, 99, 235));
+                    }
+                    if (col == 2 && val != null) {
+                        setFont(getFont().deriveFont(Font.BOLD));
                         c.setForeground("LOST".equalsIgnoreCase(val.toString()) ? new Color(220, 38, 38) : new Color(22, 163, 74));
                     }
-                    if (col == 5 && val != null) {
+                    if (col == 6 && val != null) {
                         String st = val.toString();
                         if ("RETURNED".equalsIgnoreCase(st)) {
                             c.setForeground(new Color(22, 163, 74));
@@ -166,20 +184,22 @@ public class ManageItemsPanel extends JPanel {
                         } else {
                             c.setForeground(new Color(37, 99, 235));
                         }
+                        setFont(getFont().deriveFont(Font.BOLD));
                     }
                 }
                 return c;
             }
         });
 
-        table.getColumnModel().getColumn(0).setPreferredWidth(50);
-        table.getColumnModel().getColumn(1).setPreferredWidth(70);
-        table.getColumnModel().getColumn(2).setPreferredWidth(180);
-        table.getColumnModel().getColumn(3).setPreferredWidth(140);
+        table.getColumnModel().getColumn(0).setPreferredWidth(45);
+        table.getColumnModel().getColumn(1).setPreferredWidth(60);
+        table.getColumnModel().getColumn(2).setPreferredWidth(70);
+        table.getColumnModel().getColumn(3).setPreferredWidth(180);
         table.getColumnModel().getColumn(4).setPreferredWidth(140);
-        table.getColumnModel().getColumn(5).setPreferredWidth(90);
-        table.getColumnModel().getColumn(6).setPreferredWidth(120);
-        table.getColumnModel().getColumn(7).setPreferredWidth(130);
+        table.getColumnModel().getColumn(5).setPreferredWidth(140);
+        table.getColumnModel().getColumn(6).setPreferredWidth(90);
+        table.getColumnModel().getColumn(7).setPreferredWidth(120);
+        table.getColumnModel().getColumn(8).setPreferredWidth(130);
 
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBorder(BorderFactory.createLineBorder(UITheme.BORDER, 1));
@@ -233,28 +253,30 @@ public class ManageItemsPanel extends JPanel {
     private void applyFilters() {
         String keyword = searchField.getText().trim();
         String cat = (String) categoryCombo.getSelectedItem();
+        String bldg = (String) buildingCombo.getSelectedItem();
         String type = (String) typeCombo.getSelectedItem();
         String st = (String) statusCombo.getSelectedItem();
 
-        loadItemsAsync(keyword, cat, type, st);
+        loadItemsAsync(keyword, cat, bldg, type, st);
     }
 
     private void resetFilters() {
         searchField.setText("");
         categoryCombo.setSelectedIndex(0);
+        buildingCombo.setSelectedIndex(0);
         typeCombo.setSelectedIndex(0);
         statusCombo.setSelectedIndex(0);
-        loadItemsAsync(null, "ALL", "ALL", "ALL");
+        loadItemsAsync(null, "ALL", "ALL", "ALL", "ALL");
     }
 
-    private void loadItemsAsync(String keyword, String category, String itemType, String status) {
+    private void loadItemsAsync(String keyword, String category, String building, String itemType, String status) {
         statusLabel.setText("Querying items from database...");
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
         new SwingWorker<List<Item>, Void>() {
             @Override
             protected List<Item> doInBackground() {
-                return itemDAO.searchItems(keyword, category, itemType, status);
+                return itemDAO.searchItems(keyword, category, building, itemType, status);
             }
 
             @Override
@@ -266,9 +288,11 @@ public class ManageItemsPanel extends JPanel {
                     for (Item i : itemList) {
                         String dateStr = i.getReportDate() != null ? dateFormat.format(i.getReportDate()) : "N/A";
                         String reporter = i.getReporterName() != null ? i.getReporterName() : "User #" + i.getReportedBy();
+                        String photoInd = (i.getImagePath() != null && !i.getImagePath().trim().isEmpty()) ? "📷" : "—";
 
                         tableModel.addRow(new Object[]{
                                 i.getItemId(),
+                                photoInd,
                                 i.getItemType(),
                                 i.getTitle(),
                                 i.getCategory() != null ? i.getCategory() : "N/A",

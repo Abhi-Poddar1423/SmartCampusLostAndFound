@@ -159,6 +159,10 @@ public class MyClaimsPanel extends JPanel {
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
+    public void refreshClaims() {
+        loadUserClaims();
+    }
+
     public void loadUserClaims() {
         int currentUserId = SessionManager.getInstance().getUserId();
         if (currentUserId <= 0) return;

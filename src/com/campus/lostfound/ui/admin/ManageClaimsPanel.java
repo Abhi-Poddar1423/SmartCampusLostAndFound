@@ -184,6 +184,10 @@ public class ManageClaimsPanel extends JPanel {
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
+    public void refreshClaims() {
+        loadClaimsAsync();
+    }
+
     public void loadClaimsAsync() {
         statusLabel.setText("Fetching claims from database...");
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
