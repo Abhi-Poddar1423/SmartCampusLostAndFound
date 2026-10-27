@@ -88,7 +88,8 @@ In large college campuses, students and staff frequently misplace personal items
 SmartCampusLostAndFound/
 ├── bin/                       # Compiled .class files
 ├── config/
-│   └── db.properties          # Database connection parameters (git-ignored)
+│   ├── db.properties.example  # Version-controlled configuration template
+│   └── db.properties          # Local database credentials (git-ignored)
 ├── docs/                      # UML diagrams, reports, demo guide
 ├── lib/
 │   ├── flatlaf-3.5.4.jar      # Modern Swing theme library
@@ -168,7 +169,9 @@ CREATE TABLE IF NOT EXISTS claims (
 
 Database connection credentials reside in `config/db.properties`. This keeps passwords decoupled from Java source code and excluded from version control via `.gitignore`.
 
-Open `config/db.properties` and enter your local MySQL password:
+To configure your local environment, copy the template and edit your MySQL credentials:
+1. Copy `config/db.properties.example` to `config/db.properties`.
+2. Open `config/db.properties` and enter your local database username and password:
 
 ```properties
 # JDBC Connection URL
