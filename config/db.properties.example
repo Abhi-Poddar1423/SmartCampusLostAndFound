@@ -1,0 +1,12 @@
+# ===================================================================
+# Database Configuration Template for Smart Campus Lost & Found
+# ===================================================================
+# Copy this file to 'config/db.properties' and fill in your local MySQL credentials.
+# Note: 'config/db.properties' is ignored by Git and should never be committed.
+
+# JDBC connection string targeting the 'smart_campus_db' database
+db.url=jdbc:mysql://localhost:3306/smart_campus_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+
+# MySQL credentials (replace placeholders with your local database credentials)
+db.user=YOUR_MYSQL_USERNAME
+db.password=YOUR_MYSQL_PASSWORD

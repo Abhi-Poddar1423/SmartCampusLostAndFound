@@ -1,0 +1,40 @@
+# Compiled class files & build output
+bin/
+*.class
+
+# Configuration with local credentials (keep local, never commit)
+config/db.properties
+
+# User-uploaded item photos and personal data
+uploads/items/*
+!uploads/items/.gitkeep
+
+# Database backups, SQL dumps, and data exports
+*.sql
+*.dump
+backups/
+
+# Logs, crash dumps, and temporary files
+*.log
+*.tmp
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# IDE and editor settings
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+*.sublime-project
+*.sublime-workspace
+
+# OS-generated metadata
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+.DS_Store
+.Spotlight-V100
+.Trashes
