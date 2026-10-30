@@ -42,7 +42,11 @@ public class RoundedButton extends JButton {
     }
 
     public RoundedButton(String text, ButtonType type) {
-        super(text);
+        this(text, null, type);
+    }
+
+    public RoundedButton(String text, javax.swing.Icon icon, ButtonType type) {
+        super(text, icon);
         this.buttonType = type;
         setupStyling();
 
@@ -107,8 +111,8 @@ public class RoundedButton extends JButton {
                 break;
             case OUTLINE:
                 normalBg = Color.WHITE;
-                hoverBg = new Color(241, 245, 249);
-                pressedBg = new Color(226, 232, 240);
+                hoverBg = new Color(240, 253, 250); // Soft teal wash on hover
+                pressedBg = new Color(204, 251, 241); // Teal-100 pressed
                 normalFg = UITheme.PRIMARY;
                 break;
             case SECONDARY:
@@ -120,6 +124,18 @@ public class RoundedButton extends JButton {
                 break;
         }
         setForeground(normalFg);
+    }
+
+    public ButtonType getButtonType() {
+        return buttonType;
+    }
+
+    public boolean isHovered() {
+        return isHovered;
+    }
+
+    public boolean isPressed() {
+        return isPressed;
     }
 
     public void setCornerRadius(int radius) {
@@ -145,10 +161,10 @@ public class RoundedButton extends JButton {
             currentFg = new Color(148, 163, 184);
         } else if (isPressed) {
             currentBg = pressedBg;
-            currentFg = normalFg;
+            currentFg = (buttonType == ButtonType.OUTLINE) ? UITheme.ACCENT_PRESSED : normalFg;
         } else if (isHovered) {
             currentBg = hoverBg;
-            currentFg = normalFg;
+            currentFg = (buttonType == ButtonType.OUTLINE) ? UITheme.ACCENT : normalFg;
         } else {
             currentBg = normalBg;
             currentFg = normalFg;
@@ -168,17 +184,57 @@ public class RoundedButton extends JButton {
 
         // Draw border for OUTLINE type
         if (buttonType == ButtonType.OUTLINE) {
-            g2.setColor(isEnabled() ? UITheme.PRIMARY : new Color(203, 213, 225));
+            if (!isEnabled()) {
+                g2.setColor(new Color(203, 213, 225));
+                g2.setStroke(new java.awt.BasicStroke(1.0f));
+            } else if (isPressed) {
+                g2.setColor(UITheme.ACCENT_PRESSED);
+                g2.setStroke(new java.awt.BasicStroke(1.5f));
+            } else if (isHovered) {
+                g2.setColor(UITheme.ACCENT);
+                g2.setStroke(new java.awt.BasicStroke(1.5f));
+            } else {
+                g2.setColor(UITheme.PRIMARY);
+                g2.setStroke(new java.awt.BasicStroke(1.0f));
+            }
             g2.drawRoundRect(0, 0, width - 1, height - 1, cornerRadius, cornerRadius);
         }
 
-        // Draw Text
+        // Draw Text and Icon
         g2.setColor(currentFg);
         g2.setFont(getFont());
         FontMetrics fm = g2.getFontMetrics();
-        int textX = (width - fm.stringWidth(getText())) / 2;
-        int textY = (height + fm.getAscent() - fm.getDescent()) / 2;
-        g2.drawString(getText(), textX, textY);
+
+        javax.swing.Icon icon = getIcon();
+        String text = getText();
+        boolean hasText = text != null && !text.isEmpty();
+        boolean hasIcon = icon != null;
+
+        if (hasIcon && hasText) {
+            int gap = getIconTextGap() > 0 ? getIconTextGap() : 8;
+            int iconW = icon.getIconWidth();
+            int iconH = icon.getIconHeight();
+            int textW = fm.stringWidth(text);
+            int totalW = iconW + gap + textW;
+            int startX = (width - totalW) / 2;
+
+            int iconY = (height - iconH) / 2;
+            icon.paintIcon(this, g2, startX, iconY);
+
+            int textX = startX + iconW + gap;
+            int textY = (height + fm.getAscent() - fm.getDescent()) / 2;
+            g2.drawString(text, textX, textY);
+        } else if (hasIcon) {
+            int iconW = icon.getIconWidth();
+            int iconH = icon.getIconHeight();
+            int iconX = (width - iconW) / 2;
+            int iconY = (height - iconH) / 2;
+            icon.paintIcon(this, g2, iconX, iconY);
+        } else if (hasText) {
+            int textX = (width - fm.stringWidth(text)) / 2;
+            int textY = (height + fm.getAscent() - fm.getDescent()) / 2;
+            g2.drawString(text, textX, textY);
+        }
 
         g2.dispose();
     }

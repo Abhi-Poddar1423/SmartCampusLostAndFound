@@ -41,35 +41,36 @@ public class AdminSetup {
             return false;
         }
 
-        UserDAO userDAO = new UserDAO();
-        User existingUser = userDAO.findByEmail(email.trim());
-
-        if (existingUser != null) {
-            if (existingUser.getRole() == User.Role.ADMIN) {
-                System.out.println("[AdminSetup] Account already has ADMIN role: " + email);
-                return true;
-            }
-            // Elevate existing user to ADMIN
-            boolean updated = userDAO.updateUserRole(existingUser.getUserId(), User.Role.ADMIN);
-            if (updated) {
-                System.out.println("[AdminSetup] Successfully elevated existing account to ADMIN: " + email);
-                return true;
-            } else {
-                System.err.println("[AdminSetup] Failed to update role for: " + email);
-                return false;
-            }
+        // Security Guard: Prohibit bootstrap execution if a Student session is active
+        if (SessionManager.getInstance().isLoggedIn() && !SessionManager.getInstance().isAdmin()) {
+            System.err.println("[AdminSetup] Security Guard: Cannot execute Administrator setup while a Student session is active.");
+            return false;
         }
 
-        // Create new Administrator user
-        String hashedPassword = PasswordUtil.hashPassword(plainPassword);
-        User newAdmin = new User(name.trim(), email.trim(), hashedPassword, User.Role.ADMIN);
+        UserDAO userDAO = new UserDAO();
 
-        boolean registered = userDAO.register(newAdmin);
-        if (registered) {
-            System.out.println("[AdminSetup] Successfully created new administrator account for: " + email);
-            return true;
-        } else {
-            System.err.println("[AdminSetup] Failed to register administrator in database.");
+        // Policy Guard: Smart Campus Lost & Found enforces initial setup only once
+        int activeAdmins = userDAO.countAdminUsers();
+        if (activeAdmins > 0) {
+            System.err.println("[AdminSetup] Policy Guard: Smart Campus Lost & Found enforces exactly ONE active Administrator.");
+            System.err.println("  Initial bootstrap has already been completed. An active Administrator already exists in the system.");
+            return false;
+        }
+
+        try {
+            boolean success = userDAO.executeInitialAdminBootstrap(name.trim(), email.trim(), plainPassword);
+            if (success) {
+                System.out.println("[AdminSetup] Successfully initialized administrator account for: " + email);
+            }
+            return success;
+        } catch (IllegalStateException e) {
+            System.err.println("[AdminSetup] Bootstrap rejected: " + e.getMessage());
+            return false;
+        } catch (SecurityException e) {
+            System.err.println("[AdminSetup] Security violation: " + e.getMessage());
+            return false;
+        } catch (Exception e) {
+            System.err.println("[AdminSetup] Failed to initialize administrator: " + e.getMessage());
             return false;
         }
     }

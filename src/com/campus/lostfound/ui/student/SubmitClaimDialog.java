@@ -203,7 +203,21 @@ public class SubmitClaimDialog extends JDialog {
 
                     // Save claim with PENDING status
                     Claim newClaim = new Claim(targetItem.getItemId(), currentUserId, message);
-                    return claimDAO.submitClaim(newClaim);
+                    boolean submitted = claimDAO.submitClaim(newClaim);
+                    if (submitted && targetItem.getReportedBy() > 0 && targetItem.getReportedBy() != currentUserId) {
+                        com.campus.lostfound.dao.NotificationDAO notifDAO = new com.campus.lostfound.dao.NotificationDAO();
+                        com.campus.lostfound.models.Notification n = new com.campus.lostfound.models.Notification(
+                                targetItem.getReportedBy(),
+                                "New Claim Submitted",
+                                "A student submitted an ownership claim for your reported item '" + targetItem.getTitle() + "'.",
+                                com.campus.lostfound.models.Notification.NotificationType.CLAIM_SUBMITTED,
+                                "CLAIM",
+                                newClaim.getClaimId(),
+                                "CLAIM_SUBMITTED:" + newClaim.getClaimId()
+                        );
+                        notifDAO.createNotification(n);
+                    }
+                    return submitted;
                 } catch (Exception ex) {
                     failureReason = "Database error: " + ex.getMessage();
                     return false;

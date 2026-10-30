@@ -8,6 +8,7 @@ import com.campus.lostfound.ui.common.CampusLogo;
 import com.campus.lostfound.ui.common.RoundedButton;
 import com.campus.lostfound.ui.common.UITheme;
 import com.campus.lostfound.ui.student.StudentDashboard;
+import com.campus.lostfound.utils.LoginRateLimiter;
 import com.campus.lostfound.utils.PasswordUtil;
 import com.campus.lostfound.utils.SessionManager;
 import com.campus.lostfound.utils.ValidationUtil;
@@ -63,6 +64,7 @@ public class LoginFrame extends JFrame {
     private JLabel errorLabel;
     private JLabel createAccountLink;
     private boolean passwordVisible = false;
+    private static final String DUMMY_TIMING_HASH = PasswordUtil.hashPassword("smart_campus_timing_pad_secure_random");
 
     public LoginFrame() {
         this.userDAO = new UserDAO();
@@ -173,12 +175,18 @@ public class LoginFrame extends JFrame {
         brandHeaderRow.add(logo);
         brandHeaderRow.add(titleBlock);
 
+        JLabel developedByLabel = new JLabel("Developed by Abhishek Kumar");
+        developedByLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        developedByLabel.setForeground(new Color(204, 251, 241));
+        developedByLabel.setAlignmentX(LEFT_ALIGNMENT);
+        developedByLabel.setBorder(BorderFactory.createEmptyBorder(8, 2, 0, 0));
+
         // Headline
         JLabel mainHeadline = new JLabel("Lost Something? Find It Here.");
         mainHeadline.setFont(new Font("Segoe UI", Font.BOLD, 21));
         mainHeadline.setForeground(Color.WHITE);
         mainHeadline.setAlignmentX(LEFT_ALIGNMENT);
-        mainHeadline.setBorder(BorderFactory.createEmptyBorder(24, 2, 0, 0));
+        mainHeadline.setBorder(BorderFactory.createEmptyBorder(20, 2, 0, 0));
 
         // Short Description
         JLabel shortDesc = new JLabel("<html>A smarter campus community that helps lost belongings find their way home.</html>");
@@ -201,6 +209,7 @@ public class LoginFrame extends JFrame {
         featuresPanel.add(createFeatureItem("Secure Ownership Verification"));
 
         leftBrandPanel.add(brandHeaderRow);
+        leftBrandPanel.add(developedByLabel);
         leftBrandPanel.add(mainHeadline);
         leftBrandPanel.add(shortDesc);
         leftBrandPanel.add(featuresPanel);
@@ -245,7 +254,7 @@ public class LoginFrame extends JFrame {
         emailField = UITheme.createTextField(20);
         emailField.setAlignmentX(LEFT_ALIGNMENT);
         emailField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-        emailField.putClientProperty("JTextField.placeholderText", "student@university.edu");
+        emailField.putClientProperty("JTextField.placeholderText", "e.g. abhishek@gmail.com");
         emailField.putClientProperty("JTextField.leadingIcon", CampusIcons.get(CampusIcons.IconType.EMAIL, 15, 15, UITheme.TEXT_MUTED));
 
         // Password Field with Leading Icon, Placeholder & Trailing Eye Toggle embedded inside
@@ -262,10 +271,9 @@ public class LoginFrame extends JFrame {
         JButton eyeToggleBtn = new JButton(CampusIcons.get(CampusIcons.IconType.EYE, 15, 15, UITheme.TEXT_MUTED));
         eyeToggleBtn.setToolTipText("Toggle password visibility");
         eyeToggleBtn.setContentAreaFilled(false);
-        eyeToggleBtn.setBorderPainted(false);
         eyeToggleBtn.setFocusPainted(false);
         eyeToggleBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        eyeToggleBtn.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 8));
+        eyeToggleBtn.putClientProperty("JButton.buttonType", "toolBarButton");
         eyeToggleBtn.addActionListener(e -> {
             passwordVisible = !passwordVisible;
             passwordField.setEchoChar(passwordVisible ? (char) 0 : '•');
@@ -422,7 +430,7 @@ public class LoginFrame extends JFrame {
         formCard.add(loginButton);
         formCard.add(Box.createVerticalStrut(12));
         formCard.add(dividerRow);
-        formCard.add(Box.createVerticalStrut(12));
+        formCard.add(Box.createVerticalStrut(10));
         formCard.add(registerRow);
 
         rightWrapper.add(formCard);
@@ -465,6 +473,14 @@ public class LoginFrame extends JFrame {
             return;
         }
 
+        // Rate Limiting Guard: Prevent brute force when account is temporarily locked
+        if (LoginRateLimiter.getInstance().isLocked(email)) {
+            showError(LoginRateLimiter.getInstance().getLockoutMessage(email));
+            passwordField.setText("");
+            passwordField.requestFocus();
+            return;
+        }
+
         setLoading(true);
 
         new SwingWorker<User, Void>() {
@@ -472,6 +488,8 @@ public class LoginFrame extends JFrame {
             protected User doInBackground() {
                 User user = userDAO.findByEmail(email);
                 if (user == null) {
+                    // Timing defense: Run PBKDF2 with constant dummy hash so timing matches real account
+                    PasswordUtil.verifyPassword(password, DUMMY_TIMING_HASH);
                     return null;
                 }
                 boolean verified = PasswordUtil.verifyPassword(password, user.getPassword());
@@ -484,11 +502,25 @@ public class LoginFrame extends JFrame {
                 try {
                     User authenticatedUser = get();
                     if (authenticatedUser == null) {
-                        showError("Invalid email or password. Please try again.");
+                        boolean nowLocked = LoginRateLimiter.getInstance().recordFailedAttempt(email);
+                        if (nowLocked) {
+                            showError(LoginRateLimiter.getInstance().getLockoutMessage(email));
+                        } else {
+                            int remaining = LoginRateLimiter.getInstance().getAttemptsRemaining(email);
+                            if (remaining <= 2) {
+                                showError(String.format("Invalid email or password. (%d attempt%s remaining before temporary lockout)",
+                                        remaining, remaining == 1 ? "" : "s"));
+                            } else {
+                                showError("Invalid email or password. Please try again.");
+                            }
+                        }
                         passwordField.setText("");
                         passwordField.requestFocus();
                         return;
                     }
+
+                    // Successful login: reset failed attempts
+                    LoginRateLimiter.getInstance().recordSuccessfulLogin(email);
 
                     SessionManager.getInstance().login(authenticatedUser);
 

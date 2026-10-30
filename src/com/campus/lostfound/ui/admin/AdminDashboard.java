@@ -1,10 +1,13 @@
 package com.campus.lostfound.ui.admin;
 
+import com.campus.lostfound.dao.NotificationDAO;
+import com.campus.lostfound.dao.UserDAO;
 import com.campus.lostfound.ui.auth.LoginFrame;
 import com.campus.lostfound.ui.common.CampusIcons;
 import com.campus.lostfound.ui.common.CampusLogo;
 import com.campus.lostfound.ui.common.RoundedButton;
 import com.campus.lostfound.ui.common.UITheme;
+import com.campus.lostfound.ui.student.NotificationsPanel;
 import com.campus.lostfound.utils.SessionManager;
 
 import javax.swing.BorderFactory;
@@ -17,6 +20,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -48,6 +52,11 @@ public class AdminDashboard extends JFrame {
     private ManageItemsPanel itemsPanel;
     private ManageClaimsPanel claimsPanel;
     private ManageUsersPanel usersPanel;
+    private NotificationsPanel notificationsPanel;
+
+    private RoundedButton refreshAllBtn;
+    private UITheme.BadgeBellButton topBellBtn;
+    private final NotificationDAO notificationDAO = new NotificationDAO();
 
     private final Map<String, JButton> navButtons = new HashMap<>();
     private String activeNav = "OVERVIEW";
@@ -126,6 +135,8 @@ public class AdminDashboard extends JFrame {
         sidebar.add(createNavButton("Manage Claims", CampusIcons.IconType.MY_CLAIMS, "CLAIMS"));
         sidebar.add(Box.createVerticalStrut(6));
         sidebar.add(createNavButton("Manage Users", CampusIcons.IconType.USERS, "USERS"));
+        sidebar.add(Box.createVerticalStrut(6));
+        sidebar.add(createNavButton("Notifications", CampusIcons.IconType.NOTICE_BELL, "NOTIFICATIONS"));
 
         sidebar.add(Box.createVerticalGlue());
 
@@ -139,6 +150,15 @@ public class AdminDashboard extends JFrame {
                 BorderFactory.createEmptyBorder(14, 0, 0, 0)
         ));
 
+        JPanel profileRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        profileRow.setOpaque(false);
+        profileRow.setAlignmentX(LEFT_ALIGNMENT);
+
+        JPanel avatar = UITheme.createInitialAvatar(adminName, 36);
+        JPanel textCol = new JPanel();
+        textCol.setLayout(new BoxLayout(textCol, BoxLayout.Y_AXIS));
+        textCol.setOpaque(false);
+
         JLabel userNameLbl = new JLabel(adminName);
         userNameLbl.setFont(UITheme.FONT_BOLD);
         userNameLbl.setForeground(UITheme.TEXT_LIGHT);
@@ -147,6 +167,13 @@ public class AdminDashboard extends JFrame {
         userRoleLbl.setFont(UITheme.FONT_SMALL);
         userRoleLbl.setForeground(UITheme.ACCENT_LIGHT);
 
+        textCol.add(userNameLbl);
+        textCol.add(Box.createVerticalStrut(2));
+        textCol.add(userRoleLbl);
+
+        profileRow.add(avatar);
+        profileRow.add(textCol);
+
         RoundedButton logoutBtn = new RoundedButton("Logout", RoundedButton.ButtonType.OUTLINE);
         logoutBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         logoutBtn.setAlignmentX(LEFT_ALIGNMENT);
@@ -154,9 +181,7 @@ public class AdminDashboard extends JFrame {
         logoutBtn.setIconTextGap(8);
         logoutBtn.addActionListener(e -> handleLogout());
 
-        userCard.add(userNameLbl);
-        userCard.add(Box.createVerticalStrut(2));
-        userCard.add(userRoleLbl);
+        userCard.add(profileRow);
         userCard.add(Box.createVerticalStrut(12));
         userCard.add(logoutBtn);
 
@@ -174,11 +199,13 @@ public class AdminDashboard extends JFrame {
         itemsPanel = new ManageItemsPanel(() -> overviewPanel.refreshMetrics());
         claimsPanel = new ManageClaimsPanel(() -> overviewPanel.refreshMetrics());
         usersPanel = new ManageUsersPanel(() -> overviewPanel.refreshMetrics());
+        notificationsPanel = new NotificationsPanel(this::updateUnreadBadgeAsync);
 
         contentContainer.add(overviewPanel, "OVERVIEW");
         contentContainer.add(itemsPanel, "ITEMS");
         contentContainer.add(claimsPanel, "CLAIMS");
         contentContainer.add(usersPanel, "USERS");
+        contentContainer.add(notificationsPanel, "NOTIFICATIONS");
 
         // Top Header Actions Strip
         JPanel topStrip = new JPanel(new BorderLayout(14, 0));
@@ -195,12 +222,16 @@ public class AdminDashboard extends JFrame {
         JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         rightActions.setOpaque(false);
 
-        RoundedButton refreshAllBtn = new RoundedButton("Refresh Data", RoundedButton.ButtonType.OUTLINE);
+        topBellBtn = new UITheme.BadgeBellButton();
+        topBellBtn.addActionListener(e -> switchView("NOTIFICATIONS"));
+
+        refreshAllBtn = new RoundedButton("Refresh Data", RoundedButton.ButtonType.OUTLINE);
         refreshAllBtn.setPreferredSize(new Dimension(130, 36));
         refreshAllBtn.setIcon(CampusIcons.get(CampusIcons.IconType.REFRESH, 14, 14, UITheme.PRIMARY));
-        refreshAllBtn.setIconTextGap(6);
+        refreshAllBtn.setIconTextGap(8);
         refreshAllBtn.addActionListener(e -> refreshActiveView());
 
+        rightActions.add(topBellBtn);
         rightActions.add(refreshAllBtn);
 
         topStrip.add(headerTitle, BorderLayout.WEST);
@@ -214,6 +245,7 @@ public class AdminDashboard extends JFrame {
         add(centerPanel, BorderLayout.CENTER);
 
         updateNavSelection("OVERVIEW");
+        updateUnreadBadgeAsync();
     }
 
     private JButton createNavButton(String title, CampusIcons.IconType iconType, String viewKey) {
@@ -230,6 +262,22 @@ public class AdminDashboard extends JFrame {
         btn.setIcon(CampusIcons.get(iconType, 18, 18, new Color(148, 163, 184)));
         btn.setIconTextGap(12);
         btn.setBorder(BorderFactory.createEmptyBorder(8, 14, 8, 12));
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                if (!viewKey.equals(activeNav)) {
+                    btn.setBackground(new Color(28, 56, 86));
+                }
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                if (!viewKey.equals(activeNav)) {
+                    btn.setBackground(UITheme.BG_SIDEBAR);
+                }
+            }
+        });
 
         btn.addActionListener(e -> switchView(viewKey));
 
@@ -265,6 +313,17 @@ public class AdminDashboard extends JFrame {
     }
 
     private void refreshActiveView() {
+        if (!SessionManager.getInstance().isAdmin() || !new UserDAO().isActiveAdmin(SessionManager.getInstance().getUserId())) {
+            JOptionPane.showMessageDialog(this, 
+                    "Your administrator session is no longer active. Please sign in again.", 
+                    "Session Expired", 
+                    JOptionPane.WARNING_MESSAGE);
+            SessionManager.getInstance().logout();
+            new LoginFrame().setVisible(true);
+            dispose();
+            return;
+        }
+
         switch (activeNav) {
             case "OVERVIEW":
                 overviewPanel.refreshMetrics();
@@ -278,7 +337,42 @@ public class AdminDashboard extends JFrame {
             case "USERS":
                 usersPanel.refreshUsers();
                 break;
+            case "NOTIFICATIONS":
+                notificationsPanel.refreshNotifications();
+                break;
         }
+        updateUnreadBadgeAsync();
+    }
+
+    private void updateUnreadBadgeAsync() {
+        int userId = SessionManager.getInstance().getUserId();
+        if (userId <= 0) return;
+
+        new SwingWorker<Integer, Void>() {
+            @Override
+            protected Integer doInBackground() {
+                return notificationDAO.getUnreadCount(userId);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    int unread = get();
+                    JButton notifNavBtn = navButtons.get("NOTIFICATIONS");
+                    if (notifNavBtn != null) {
+                        if (unread > 0) {
+                            notifNavBtn.setText("Notifications (" + unread + ")");
+                        } else {
+                            notifNavBtn.setText("Notifications");
+                        }
+                    }
+
+                    if (topBellBtn != null) {
+                        topBellBtn.setUnreadCount(unread);
+                    }
+                } catch (Exception ignored) { }
+            }
+        }.execute();
     }
 
     private void handleLogout() {

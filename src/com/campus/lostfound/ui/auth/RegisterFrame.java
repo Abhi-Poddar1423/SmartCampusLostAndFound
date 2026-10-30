@@ -146,6 +146,11 @@ public class RegisterFrame extends JFrame {
         portalSubtitle.setForeground(UITheme.ACCENT_LIGHT);
         portalSubtitle.setAlignmentX(CENTER_ALIGNMENT);
 
+        JLabel developedByLabel = new JLabel("Developed by Abhishek Kumar", SwingConstants.CENTER);
+        developedByLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        developedByLabel.setForeground(new Color(204, 251, 241));
+        developedByLabel.setAlignmentX(CENTER_ALIGNMENT);
+
         JLabel taglineLabel = new JLabel("<html><center>A Smarter Way to Reunite Lost Items<br>with Their Owners.</center></html>", SwingConstants.CENTER);
         taglineLabel.setFont(UITheme.FONT_TAGLINE);
         taglineLabel.setForeground(new Color(224, 231, 255));
@@ -162,15 +167,19 @@ public class RegisterFrame extends JFrame {
         infoPanel.add(createGuidelineItem("Password must be at least 6 characters"));
         infoPanel.add(Box.createVerticalStrut(12));
         infoPanel.add(createGuidelineItem("Instant access to report and claim lost items"));
+        infoPanel.add(Box.createVerticalStrut(12));
+        infoPanel.add(createGuidelineItem("Roll number and phone can be completed in profile"));
 
         leftBrandPanel.add(logo);
-        leftBrandPanel.add(Box.createVerticalStrut(16));
+        leftBrandPanel.add(Box.createVerticalStrut(14));
         leftBrandPanel.add(brandName);
         leftBrandPanel.add(Box.createVerticalStrut(4));
         leftBrandPanel.add(portalSubtitle);
-        leftBrandPanel.add(Box.createVerticalStrut(10));
+        leftBrandPanel.add(Box.createVerticalStrut(8));
+        leftBrandPanel.add(developedByLabel);
+        leftBrandPanel.add(Box.createVerticalStrut(12));
         leftBrandPanel.add(taglineLabel);
-        leftBrandPanel.add(Box.createVerticalStrut(22));
+        leftBrandPanel.add(Box.createVerticalStrut(18));
         leftBrandPanel.add(infoPanel);
         leftBrandPanel.add(Box.createVerticalGlue());
 
@@ -194,7 +203,7 @@ public class RegisterFrame extends JFrame {
         JPanel accentBar = UITheme.createAccentBar(46, 4);
         accentBar.setAlignmentX(LEFT_ALIGNMENT);
 
-        JLabel subtitleLabel = new JLabel("Join your campus lost & found network.", SwingConstants.LEFT);
+        JLabel subtitleLabel = new JLabel("<html>Join your campus network. <span style='font-size:11px; color:#64748B;'>(Roll number & department are configured in Profile after sign in)</span></html>", SwingConstants.LEFT);
         subtitleLabel.setFont(UITheme.FONT_REGULAR);
         subtitleLabel.setForeground(UITheme.TEXT_SECONDARY);
         subtitleLabel.setAlignmentX(LEFT_ALIGNMENT);
@@ -210,14 +219,14 @@ public class RegisterFrame extends JFrame {
         nameField = UITheme.createTextField(20);
         nameField.setAlignmentX(LEFT_ALIGNMENT);
         nameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
-        nameField.putClientProperty("JTextField.placeholderText", "e.g. Alex Morgan");
+        nameField.putClientProperty("JTextField.placeholderText", "e.g. Abhishek Kumar");
 
         JLabel emailLbl = UITheme.createFieldLabel("Campus Email Address");
         emailLbl.setAlignmentX(LEFT_ALIGNMENT);
         emailField = UITheme.createTextField(20);
         emailField.setAlignmentX(LEFT_ALIGNMENT);
         emailField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
-        emailField.putClientProperty("JTextField.placeholderText", "student@university.edu");
+        emailField.putClientProperty("JTextField.placeholderText", "e.g. abhishek@gmail.com");
         emailField.putClientProperty("JTextField.leadingIcon", CampusIcons.get(CampusIcons.IconType.EMAIL, 16, 16, UITheme.TEXT_MUTED));
 
         JLabel pwdLbl = UITheme.createFieldLabel("Password (Min. 6 characters)");
@@ -225,7 +234,7 @@ public class RegisterFrame extends JFrame {
         passwordField = UITheme.createPasswordField(20);
         passwordField.setAlignmentX(LEFT_ALIGNMENT);
         passwordField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
-        passwordField.putClientProperty("JTextField.placeholderText", "Create password (min. 6 chars)");
+        passwordField.putClientProperty("JTextField.placeholderText", "Enter your password");
         passwordField.putClientProperty("JTextField.leadingIcon", CampusIcons.get(CampusIcons.IconType.LOCK, 16, 16, UITheme.TEXT_MUTED));
 
         JLabel confirmPwdLbl = UITheme.createFieldLabel("Confirm Password");
@@ -233,7 +242,7 @@ public class RegisterFrame extends JFrame {
         confirmPasswordField = UITheme.createPasswordField(20);
         confirmPasswordField.setAlignmentX(LEFT_ALIGNMENT);
         confirmPasswordField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
-        confirmPasswordField.putClientProperty("JTextField.placeholderText", "Re-enter password");
+        confirmPasswordField.putClientProperty("JTextField.placeholderText", "Re-enter your password");
         confirmPasswordField.putClientProperty("JTextField.leadingIcon", CampusIcons.get(CampusIcons.IconType.LOCK, 16, 16, UITheme.TEXT_MUTED));
 
         showPasswordCheckBox = new JCheckBox("Show passwords");

@@ -112,4 +112,20 @@ public class ValidationUtil {
     public static boolean isValidEmail(String email) {
         return email != null && EMAIL_PATTERN.matcher(email.trim()).matches();
     }
+
+    /**
+     * Validates optional student profile roll number.
+     */
+    public static boolean isValidRollNumber(String roll) {
+        if (roll == null || roll.trim().isEmpty()) return true;
+        return roll.trim().matches("^[A-Za-z0-9/_-]{2,30}$");
+    }
+
+    /**
+     * Validates optional phone number format.
+     */
+    public static boolean isValidPhoneNumber(String phone) {
+        if (phone == null || phone.trim().isEmpty()) return true;
+        return phone.trim().matches("^\\+?[0-9\\s()\\-]{7,20}$");
+    }
 }

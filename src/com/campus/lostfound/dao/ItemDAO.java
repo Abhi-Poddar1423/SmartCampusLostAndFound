@@ -2,6 +2,7 @@ package com.campus.lostfound.dao;
 
 import com.campus.lostfound.config.DBConnection;
 import com.campus.lostfound.models.Item;
+import com.campus.lostfound.utils.SessionManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -21,6 +22,10 @@ public class ItemDAO {
 
     // Cached schema check to ensure backward compatibility before and after migration
     private static volatile Boolean v2ColumnsAvailable = null;
+
+    public static void resetSchemaCache() {
+        v2ColumnsAvailable = null;
+    }
 
     private static boolean areV2ColumnsPresent(Connection conn) {
         if (v2ColumnsAvailable != null) {
@@ -98,6 +103,7 @@ public class ItemDAO {
                             item.setItemId(keys.getInt(1));
                         }
                     }
+                    notifyAdminOnNewReport(item);
                     return true;
                 }
             }
@@ -284,12 +290,33 @@ public class ItemDAO {
 
     /**
      * Updates an item's status (OPEN, CLAIMED, RETURNED).
+     * Enforces ownership or administrator authorization.
      * 
      * @param itemId Item ID
      * @param newStatus New status to set
      * @return true if updated successfully, false otherwise
      */
     public boolean updateStatus(int itemId, Item.ItemStatus newStatus) {
+        int currentUserId = SessionManager.getInstance().getUserId();
+        if (currentUserId <= 0) {
+            throw new SecurityException("Unauthorized: Authentication required to update item status.");
+        }
+
+        Item existingItem = findById(itemId);
+        if (existingItem == null) {
+            return false;
+        }
+
+        boolean isAdmin = new UserDAO().isActiveAdmin(currentUserId);
+        if (!isAdmin && existingItem.getReportedBy() != currentUserId) {
+            throw new SecurityException("Access denied: You are not authorized to update the status of another student's item.");
+        }
+
+        // Avoid spam: If status did not actually change, do nothing
+        if (existingItem.getStatus() == newStatus) {
+            return true;
+        }
+
         String sql = "UPDATE items SET status = ? WHERE item_id = ?";
 
         try (Connection conn = DBConnection.getConnection();
@@ -298,26 +325,142 @@ public class ItemDAO {
             pstmt.setString(1, newStatus.name());
             pstmt.setInt(2, itemId);
 
-            return pstmt.executeUpdate() > 0;
+            boolean updated = pstmt.executeUpdate() > 0;
+            if (updated) {
+                NotificationDAO notifDAO = new NotificationDAO();
+                int reportedBy = existingItem.getReportedBy();
+                if (reportedBy > 0) {
+                    com.campus.lostfound.models.Notification.NotificationType nType =
+                            (newStatus == Item.ItemStatus.RETURNED)
+                                    ? com.campus.lostfound.models.Notification.NotificationType.ITEM_RETURNED
+                                    : com.campus.lostfound.models.Notification.NotificationType.ITEM_STATUS_CHANGED;
+
+                    String title = (newStatus == Item.ItemStatus.RETURNED)
+                            ? "Item Marked Returned"
+                            : "Item Status Updated";
+
+                    String msg = "Your reported item '" + existingItem.getTitle() + "' status changed from " +
+                            existingItem.getStatus() + " to " + newStatus + ".";
+
+                    String dedupKey = "ITEM_STATUS:" + itemId + ":" + newStatus.name();
+
+                    com.campus.lostfound.models.Notification n = new com.campus.lostfound.models.Notification(
+                            reportedBy,
+                            title,
+                            msg,
+                            nType,
+                            "ITEM",
+                            itemId,
+                            dedupKey
+                    );
+                    notifDAO.createNotification(n);
+                }
+
+                // If marked RETURNED, also notify claimant if there is an approved claim
+                if (newStatus == Item.ItemStatus.RETURNED) {
+                    notifyApprovedClaimantOnReturn(conn, itemId, existingItem.getTitle(), notifDAO);
+                }
+            }
+            return updated;
         } catch (SQLException e) {
             System.err.println("[ItemDAO] Error updating item status: " + e.getMessage());
         }
         return false;
     }
 
+    private void notifyApprovedClaimantOnReturn(Connection conn, int itemId, String itemTitle, NotificationDAO notifDAO) {
+        String findApprovedSql = "SELECT claim_id, claimed_by FROM claims WHERE item_id = ? AND status = 'APPROVED'";
+        try (PreparedStatement pstmt = conn.prepareStatement(findApprovedSql)) {
+            pstmt.setInt(1, itemId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    int claimId = rs.getInt("claim_id");
+                    int claimantId = rs.getInt("claimed_by");
+                    if (claimantId > 0) {
+                        com.campus.lostfound.models.Notification n = new com.campus.lostfound.models.Notification(
+                                claimantId,
+                                "Item Successfully Returned",
+                                "The item '" + itemTitle + "' associated with your approved claim has been marked RETURNED.",
+                                com.campus.lostfound.models.Notification.NotificationType.ITEM_RETURNED,
+                                "ITEM",
+                                itemId,
+                                "CLAIMANT_ITEM_RETURNED:" + itemId + ":" + claimId
+                        );
+                        notifDAO.createNotification(n);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("[ItemDAO] Error checking approved claimant for notification: " + e.getMessage());
+        }
+    }
+
+    private void notifyAdminOnNewReport(Item item) {
+        if (item == null || item.getItemId() <= 0) return;
+        try {
+            int adminId = new UserDAO().getActiveAdminUserId();
+            if (adminId > 0 && adminId != item.getReportedBy()) {
+                NotificationDAO notifDAO = new NotificationDAO();
+                String typeStr = (item.getItemType() == Item.ItemType.LOST) ? "Lost" : "Found";
+                String title = "New " + typeStr + " Item Reported";
+                String locationInfo = (item.getLocation() != null && !item.getLocation().trim().isEmpty())
+                        ? " at " + item.getLocation()
+                        : "";
+                String message = "A student reported a " + typeStr.toUpperCase() + " item: '" + item.getTitle() + "'" + locationInfo + ".";
+                String dedupKey = "ADMIN_NEW_" + item.getItemType().name() + "_ITEM:" + item.getItemId();
+
+                com.campus.lostfound.models.Notification n = new com.campus.lostfound.models.Notification(
+                        adminId,
+                        title,
+                        message,
+                        com.campus.lostfound.models.Notification.NotificationType.GENERAL,
+                        "ITEM",
+                        item.getItemId(),
+                        dedupKey
+                );
+                notifDAO.createNotification(n);
+            }
+        } catch (Exception e) {
+            System.err.println("[ItemDAO] Notice: Failed to dispatch admin notification for new item: " + e.getMessage());
+        }
+    }
+
     /**
      * Deletes an item by ID.
+     * Enforces item ownership authorization:
+     * - Administrators can delete any item.
+     * - Students can delete only items they reported themselves (enforced in the SQL query).
      * 
      * @param itemId Item ID
      * @return true if deleted, false otherwise
      */
     public boolean deleteItem(int itemId) {
-        String sql = "DELETE FROM items WHERE item_id = ?";
+        int currentUserId = SessionManager.getInstance().getUserId();
+        if (currentUserId <= 0) {
+            throw new SecurityException("Unauthorized: Authentication required to delete an item.");
+        }
+
+        boolean isAdmin = new UserDAO().isActiveAdmin(currentUserId);
+
+        // For non-admin students, verify item exists and check ownership
+        if (!isAdmin) {
+            Item existing = findById(itemId);
+            if (existing != null && existing.getReportedBy() != currentUserId) {
+                throw new SecurityException("Access denied: You are not authorized to delete an item reported by another student.");
+            }
+        }
+
+        // Ownership enforced directly in the SQL query itself for students
+        String sql = isAdmin ? "DELETE FROM items WHERE item_id = ?"
+                             : "DELETE FROM items WHERE item_id = ? AND reported_by = ?";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setInt(1, itemId);
+            if (!isAdmin) {
+                pstmt.setInt(2, currentUserId);
+            }
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("[ItemDAO] Error deleting item: " + e.getMessage());
@@ -328,11 +471,17 @@ public class ItemDAO {
     /**
      * Safely deletes an item and any associated claims within a single transaction.
      * Prevents foreign key constraint violations while preserving data integrity.
+     * Enforces backend administrator authorization.
      * 
      * @param itemId Item ID to delete
      * @return true if both item and any related claims were deleted, false otherwise
      */
     public boolean deleteItemWithClaims(int itemId) {
+        int currentUserId = SessionManager.getInstance().getUserId();
+        if (currentUserId <= 0 || !new UserDAO().isActiveAdmin(currentUserId)) {
+            throw new SecurityException("Unauthorized: Only an active Administrator may perform cascading deletion on items and claims.");
+        }
+
         String deleteClaimsSql = "DELETE FROM claims WHERE item_id = ?";
         String deleteItemSql = "DELETE FROM items WHERE item_id = ?";
 

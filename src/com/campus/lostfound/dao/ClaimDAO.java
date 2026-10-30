@@ -2,6 +2,7 @@ package com.campus.lostfound.dao;
 
 import com.campus.lostfound.config.DBConnection;
 import com.campus.lostfound.models.Claim;
+import com.campus.lostfound.utils.SessionManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -43,10 +44,16 @@ public class ClaimDAO {
                         claim.setClaimId(keys.getInt(1));
                     }
                 }
+                notifyAdminOnClaimSubmitted(conn, claim);
                 return true;
             }
         } catch (SQLException e) {
-            System.err.println("[ClaimDAO] Error submitting claim: " + e.getMessage());
+            if (e.getErrorCode() == 1062) {
+                System.err.println("[ClaimDAO] Duplicate claim prevented by database constraint (uq_claims_item_claimant): User " + 
+                        claim.getClaimedBy() + " has already submitted a claim for item " + claim.getItemId());
+            } else {
+                System.err.println("[ClaimDAO] Error submitting claim: " + e.getMessage());
+            }
         }
         return false;
     }
@@ -167,12 +174,18 @@ public class ClaimDAO {
 
     /**
      * Updates the status of a claim (PENDING, APPROVED, REJECTED).
+     * Enforces backend administrator authorization.
      * 
      * @param claimId Claim ID
      * @param newStatus New status to set
      * @return true if updated, false otherwise
      */
     public boolean updateClaimStatus(int claimId, Claim.ClaimStatus newStatus) {
+        int currentUserId = SessionManager.getInstance().getUserId();
+        if (currentUserId <= 0 || !new UserDAO().isActiveAdmin(currentUserId)) {
+            throw new SecurityException("Unauthorized: Only an active Administrator may update claim status.");
+        }
+
         String sql = "UPDATE claims SET status = ? WHERE claim_id = ?";
 
         try (Connection conn = DBConnection.getConnection();
@@ -208,6 +221,37 @@ public class ClaimDAO {
     }
 
     /**
+     * Retrieves the most relevant or recent claim for an item.
+     * Prioritizes APPROVED, then PENDING, then REJECTED.
+     * 
+     * @param itemId Item ID
+     * @return Claim object or null if none
+     */
+    public Claim getLatestClaimForItem(int itemId) {
+        String sql = "SELECT c.claim_id, c.item_id, c.claimed_by, c.message, c.status, c.claim_date, " +
+                     "       i.title AS item_title, u.name AS claimant_name, u.email AS claimant_email " +
+                     "FROM claims c " +
+                     "JOIN items i ON c.item_id = i.item_id " +
+                     "JOIN users u ON c.claimed_by = u.user_id " +
+                     "WHERE c.item_id = ? " +
+                     "ORDER BY CASE c.status WHEN 'APPROVED' THEN 1 WHEN 'PENDING' THEN 2 ELSE 3 END, c.claim_date DESC LIMIT 1";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, itemId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToClaim(rs);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("[ClaimDAO] Error finding claim by item ID: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Approves a claim in a single atomic database transaction:
      * 1. Verifies the item doesn't already have an approved claim.
      * 2. Sets claim status to 'APPROVED'.
@@ -221,7 +265,14 @@ public class ClaimDAO {
      * @throws IllegalStateException with specific reason if state is invalid
      */
     public boolean approveClaimTransaction(int claimId, int itemId) throws Exception {
+        int currentUserId = SessionManager.getInstance().getUserId();
+        if (currentUserId <= 0 || !new UserDAO().isActiveAdmin(currentUserId)) {
+            throw new SecurityException("Unauthorized: Only an active Administrator may approve ownership claims.");
+        }
+
         String checkApprovedSql = "SELECT claim_id FROM claims WHERE item_id = ? AND status = 'APPROVED'";
+        String getClaimDetailsSql = "SELECT c.claimed_by, i.title, i.reported_by FROM claims c JOIN items i ON c.item_id = i.item_id WHERE c.claim_id = ?";
+        String getCompetingClaimsSql = "SELECT claim_id, claimed_by FROM claims WHERE item_id = ? AND claim_id != ? AND status = 'PENDING'";
         String updateClaimSql = "UPDATE claims SET status = 'APPROVED' WHERE claim_id = ?";
         String updateItemSql = "UPDATE items SET status = 'CLAIMED' WHERE item_id = ?";
         String rejectOthersSql = "UPDATE claims SET status = 'REJECTED' WHERE item_id = ? AND claim_id != ? AND status = 'PENDING'";
@@ -244,6 +295,33 @@ public class ClaimDAO {
                 }
             }
 
+            // Retrieve details for notifications
+            int claimantId = -1;
+            int reportedBy = -1;
+            String itemTitle = "Item #" + itemId;
+            try (PreparedStatement pDetails = conn.prepareStatement(getClaimDetailsSql)) {
+                pDetails.setInt(1, claimId);
+                try (ResultSet rs = pDetails.executeQuery()) {
+                    if (rs.next()) {
+                        claimantId = rs.getInt("claimed_by");
+                        itemTitle = rs.getString("title");
+                        reportedBy = rs.getInt("reported_by");
+                    }
+                }
+            }
+
+            // Fetch competing claims to notify them of rejection
+            List<int[]> competingClaims = new ArrayList<>(); // [competingClaimId, competingClaimantId]
+            try (PreparedStatement pComp = conn.prepareStatement(getCompetingClaimsSql)) {
+                pComp.setInt(1, itemId);
+                pComp.setInt(2, claimId);
+                try (ResultSet rs = pComp.executeQuery()) {
+                    while (rs.next()) {
+                        competingClaims.add(new int[]{rs.getInt("claim_id"), rs.getInt("claimed_by")});
+                    }
+                }
+            }
+
             // 2. Set this claim to APPROVED
             try (PreparedStatement pClaim = conn.prepareStatement(updateClaimSql)) {
                 pClaim.setInt(1, claimId);
@@ -262,6 +340,52 @@ public class ClaimDAO {
                 pOthers.setInt(1, itemId);
                 pOthers.setInt(2, claimId);
                 pOthers.executeUpdate();
+            }
+
+            // 5. In-transaction notifications with concurrency-safe dedup
+            NotificationDAO notifDAO = new NotificationDAO();
+            if (claimantId > 0) {
+                com.campus.lostfound.models.Notification nClaimant = new com.campus.lostfound.models.Notification(
+                        claimantId,
+                        "Claim Approved",
+                        "Your claim for '" + itemTitle + "' has been approved by campus administration.",
+                        com.campus.lostfound.models.Notification.NotificationType.CLAIM_APPROVED,
+                        "CLAIM",
+                        claimId,
+                        "CLAIM_APPROVED:" + claimId
+                );
+                notifDAO.insertInTransaction(conn, nClaimant);
+            }
+
+            if (reportedBy > 0 && reportedBy != claimantId) {
+                com.campus.lostfound.models.Notification nReporter = new com.campus.lostfound.models.Notification(
+                        reportedBy,
+                        "Claim Approved on Your Reported Item",
+                        "A claim for your reported item '" + itemTitle + "' has been approved. Status changed to CLAIMED.",
+                        com.campus.lostfound.models.Notification.NotificationType.ITEM_STATUS_CHANGED,
+                        "ITEM",
+                        itemId,
+                        "ITEM_CLAIMED_BY_APPROVE:" + itemId + ":" + claimId
+                );
+                notifDAO.insertInTransaction(conn, nReporter);
+            }
+
+            // Notify competing claimants of rejection
+            for (int[] comp : competingClaims) {
+                int compClaimId = comp[0];
+                int compClaimantId = comp[1];
+                if (compClaimantId > 0) {
+                    com.campus.lostfound.models.Notification nComp = new com.campus.lostfound.models.Notification(
+                            compClaimantId,
+                            "Claim Not Selected",
+                            "Another claim was approved for '" + itemTitle + "'. Your claim #" + compClaimId + " has been closed.",
+                            com.campus.lostfound.models.Notification.NotificationType.CLAIM_REJECTED,
+                            "CLAIM",
+                            compClaimId,
+                            "CLAIM_REJECTED_COMPETING:" + compClaimId
+                    );
+                    notifDAO.insertInTransaction(conn, nComp);
+                }
             }
 
             conn.commit(); // Atomic commit
@@ -293,7 +417,23 @@ public class ClaimDAO {
      * @return true if updated to REJECTED
      */
     public boolean rejectClaim(int claimId) {
-        return updateClaimStatus(claimId, Claim.ClaimStatus.REJECTED);
+        Claim claim = findById(claimId);
+        boolean updated = updateClaimStatus(claimId, Claim.ClaimStatus.REJECTED);
+        if (updated && claim != null && claim.getClaimedBy() > 0) {
+            NotificationDAO notifDAO = new NotificationDAO();
+            String title = claim.getItemTitle() != null ? claim.getItemTitle() : "Item #" + claim.getItemId();
+            com.campus.lostfound.models.Notification n = new com.campus.lostfound.models.Notification(
+                    claim.getClaimedBy(),
+                    "Claim Rejected",
+                    "Your claim for '" + title + "' was reviewed and not approved.",
+                    com.campus.lostfound.models.Notification.NotificationType.CLAIM_REJECTED,
+                    "CLAIM",
+                    claimId,
+                    "CLAIM_REJECTED:" + claimId
+            );
+            notifDAO.createNotification(n);
+        }
+        return updated;
     }
 
     /**
@@ -334,5 +474,56 @@ public class ClaimDAO {
         } catch (SQLException ignored) { }
 
         return claim;
+    }
+
+    private void notifyAdminOnClaimSubmitted(Connection conn, Claim claim) {
+        if (claim == null || claim.getClaimId() <= 0) return;
+        try {
+            String itemTitle = "Item #" + claim.getItemId();
+            int reportedBy = -1;
+            String sql = "SELECT title, reported_by FROM items WHERE item_id = ?";
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setInt(1, claim.getItemId());
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        itemTitle = rs.getString("title");
+                        reportedBy = rs.getInt("reported_by");
+                    }
+                }
+            }
+
+            NotificationDAO notifDAO = new NotificationDAO();
+
+            // 1. Notify Admin
+            int adminId = new UserDAO().getActiveAdminUserId();
+            if (adminId > 0 && adminId != claim.getClaimedBy()) {
+                com.campus.lostfound.models.Notification n = new com.campus.lostfound.models.Notification(
+                        adminId,
+                        "New Claim Pending Review",
+                        "A student submitted a claim for item '" + itemTitle + "'. Review required in Manage Claims.",
+                        com.campus.lostfound.models.Notification.NotificationType.CLAIM_SUBMITTED,
+                        "CLAIM",
+                        claim.getClaimId(),
+                        "ADMIN_CLAIM_PENDING:" + claim.getClaimId()
+                );
+                notifDAO.createNotification(n);
+            }
+
+            // 2. Notify Item Reporter (if not the claimant themselves)
+            if (reportedBy > 0 && reportedBy != claim.getClaimedBy()) {
+                com.campus.lostfound.models.Notification nReporter = new com.campus.lostfound.models.Notification(
+                        reportedBy,
+                        "New Claim Submitted",
+                        "A student submitted an ownership claim for your reported item '" + itemTitle + "'.",
+                        com.campus.lostfound.models.Notification.NotificationType.CLAIM_SUBMITTED,
+                        "CLAIM",
+                        claim.getClaimId(),
+                        "CLAIM_SUBMITTED:" + claim.getClaimId()
+                );
+                notifDAO.createNotification(nReporter);
+            }
+        } catch (Exception e) {
+            System.err.println("[ClaimDAO] Notice: Failed to dispatch notifications on claim submission: " + e.getMessage());
+        }
     }
 }

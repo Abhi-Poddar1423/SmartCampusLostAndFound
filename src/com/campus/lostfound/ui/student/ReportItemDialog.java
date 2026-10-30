@@ -104,8 +104,8 @@ public class ReportItemDialog extends JDialog {
     }
 
     private void initializeUI() {
-        setSize(550, 620);
-        setMinimumSize(new Dimension(480, 520));
+        setSize(580, 680);
+        setMinimumSize(new Dimension(520, 580));
         setLocationRelativeTo(getParent());
         getContentPane().setBackground(UITheme.BG_MAIN);
         setLayout(new BorderLayout());

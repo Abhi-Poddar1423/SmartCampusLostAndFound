@@ -3,6 +3,7 @@ package com.campus.lostfound.ui.student;
 import com.campus.lostfound.dao.ItemDAO;
 import com.campus.lostfound.models.Item;
 import com.campus.lostfound.models.MatchResult;
+import com.campus.lostfound.ui.common.CampusIcons;
 import com.campus.lostfound.ui.common.ItemDetailsDialog;
 import com.campus.lostfound.ui.common.MatchResultsDialog;
 import com.campus.lostfound.ui.common.RoundedButton;
@@ -22,11 +23,13 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -61,6 +64,8 @@ public class ItemBrowsePanel extends JPanel {
     private JTable itemTable;
     private DefaultTableModel tableModel;
     private JLabel statusLabel;
+    private CardLayout tableCardLayout;
+    private JPanel tableContainer;
 
     private RoundedButton claimButton;
     private RoundedButton detailsButton;
@@ -171,15 +176,12 @@ public class ItemBrowsePanel extends JPanel {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
-                if (!isSelected) {
+                if (isSelected) {
+                    c.setBackground(new Color(224, 242, 254));
+                    c.setForeground(UITheme.PRIMARY);
+                } else {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     c.setForeground(UITheme.TEXT_PRIMARY);
-
-                    // Color code Photo indicator (index 1)
-                    if (col == 1 && value != null) {
-                        c.setForeground(new Color(37, 99, 235)); // Blue
-                        setFont(getFont().deriveFont(Font.BOLD));
-                    }
 
                     // Color code Type column (index 2)
                     if (col == 2 && value != null) {
@@ -205,6 +207,39 @@ public class ItemBrowsePanel extends JPanel {
                         }
                     }
                 }
+
+                // Photo indicator column (index 1) - Use robust vector camera icon
+                if (col == 1) {
+                    setHorizontalAlignment(SwingConstants.CENTER);
+                    boolean hasPhoto = false;
+                    if (value instanceof Boolean) {
+                        hasPhoto = (Boolean) value;
+                    } else if (value != null) {
+                        String s = value.toString();
+                        hasPhoto = "YES".equalsIgnoreCase(s) || "📷".equals(s) || "PHOTO".equalsIgnoreCase(s);
+                    }
+                    if (hasPhoto) {
+                        setIcon(CampusIcons.get(CampusIcons.IconType.CAMERA, 16, 16, UITheme.ACCENT));
+                        setText("");
+                        setToolTipText("Photo attached");
+                    } else {
+                        setIcon(null);
+                        setText("—");
+                        setToolTipText("No photo");
+                        if (!isSelected) {
+                            c.setForeground(UITheme.TEXT_MUTED);
+                        }
+                    }
+                } else {
+                    setIcon(null);
+                    setToolTipText(null);
+                    if (col == 0) {
+                        setHorizontalAlignment(SwingConstants.CENTER);
+                    } else {
+                        setHorizontalAlignment(SwingConstants.LEFT);
+                    }
+                }
+
                 return c;
             }
         });
@@ -223,6 +258,20 @@ public class ItemBrowsePanel extends JPanel {
         JScrollPane tableScrollPane = new JScrollPane(itemTable);
         tableScrollPane.setBorder(BorderFactory.createLineBorder(UITheme.BORDER, 1));
         tableScrollPane.getViewport().setBackground(Color.WHITE);
+
+        // Center card container with empty state
+        tableCardLayout = new CardLayout();
+        tableContainer = new JPanel(tableCardLayout);
+        tableContainer.setOpaque(false);
+
+        JPanel emptyStatePanel = UITheme.createEmptyStatePanel(
+                CampusIcons.IconType.BROWSE,
+                "No Items Match Search",
+                "Try adjusting your keyword or filters to find what you are looking for."
+        );
+
+        tableContainer.add(tableScrollPane, "TABLE");
+        tableContainer.add(emptyStatePanel, "EMPTY");
 
         // Selection listener to update action buttons
         itemTable.getSelectionModel().addListSelectionListener(e -> updateActionButtonsState());
@@ -263,7 +312,7 @@ public class ItemBrowsePanel extends JPanel {
 
         // Layout Assembly
         add(filterCard, BorderLayout.NORTH);
-        add(tableScrollPane, BorderLayout.CENTER);
+        add(tableContainer, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
@@ -321,10 +370,15 @@ public class ItemBrowsePanel extends JPanel {
 
     private void populateTable(List<Item> items) {
         tableModel.setRowCount(0);
+        if (items.isEmpty()) {
+            tableCardLayout.show(tableContainer, "EMPTY");
+        } else {
+            tableCardLayout.show(tableContainer, "TABLE");
+        }
         for (Item item : items) {
             String dateStr = item.getReportDate() != null ? dateFormat.format(item.getReportDate()) : "N/A";
             String reporter = item.getReporterName() != null ? item.getReporterName() : "Student #" + item.getReportedBy();
-            String photoInd = (item.getImagePath() != null && !item.getImagePath().trim().isEmpty()) ? "📷" : "—";
+            String photoInd = (item.getImagePath() != null && !item.getImagePath().trim().isEmpty()) ? "YES" : "—";
 
             tableModel.addRow(new Object[]{
                     item.getItemId(),

@@ -2,6 +2,7 @@ package com.campus.lostfound.ui.admin;
 
 import com.campus.lostfound.dao.ClaimDAO;
 import com.campus.lostfound.models.Claim;
+import com.campus.lostfound.ui.common.CampusIcons;
 import com.campus.lostfound.ui.common.RoundedButton;
 import com.campus.lostfound.ui.common.UITheme;
 
@@ -18,6 +19,7 @@ import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -45,6 +47,8 @@ public class ManageClaimsPanel extends JPanel {
     private JTable table;
     private DefaultTableModel tableModel;
     private JLabel statusLabel;
+    private CardLayout tableCardLayout;
+    private JPanel tableContainer;
 
     private RoundedButton approveButton;
     private RoundedButton rejectButton;
@@ -110,7 +114,10 @@ public class ManageClaimsPanel extends JPanel {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val, boolean isSel, boolean hasFoc, int row, int col) {
                 Component c = super.getTableCellRendererComponent(t, val, isSel, hasFoc, row, col);
-                if (!isSel) {
+                if (isSel) {
+                    c.setBackground(new Color(224, 242, 254));
+                    c.setForeground(UITheme.PRIMARY);
+                } else {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     c.setForeground(UITheme.TEXT_PRIMARY);
 
@@ -144,6 +151,20 @@ public class ManageClaimsPanel extends JPanel {
         scrollPane.getViewport().setBackground(Color.WHITE);
 
         table.getSelectionModel().addListSelectionListener(e -> updateButtonStates());
+
+        // Center Card Container with Empty State
+        tableCardLayout = new CardLayout();
+        tableContainer = new JPanel(tableCardLayout);
+        tableContainer.setOpaque(false);
+
+        JPanel emptyStatePanel = UITheme.createEmptyStatePanel(
+                CampusIcons.IconType.MY_CLAIMS,
+                "No Claims Found",
+                "No student ownership claims match the selected status filter."
+        );
+
+        tableContainer.add(scrollPane, "TABLE");
+        tableContainer.add(emptyStatePanel, "EMPTY");
 
         // Bottom Action Bar
         JPanel bottomPanel = new JPanel(new BorderLayout());
@@ -180,7 +201,7 @@ public class ManageClaimsPanel extends JPanel {
         bottomPanel.add(buttonBar, BorderLayout.EAST);
 
         add(filterCard, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        add(tableContainer, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
@@ -240,6 +261,12 @@ public class ManageClaimsPanel extends JPanel {
                     c.getStatus(),
                     dateStr
             });
+        }
+
+        if (displayedClaims.isEmpty()) {
+            tableCardLayout.show(tableContainer, "EMPTY");
+        } else {
+            tableCardLayout.show(tableContainer, "TABLE");
         }
 
         statusLabel.setText("Displaying " + displayedClaims.size() + " claim(s) (Filter: " + filter + ")");

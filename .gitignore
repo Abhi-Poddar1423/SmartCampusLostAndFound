@@ -1,16 +1,24 @@
 # Compiled class files & build output
 bin/
+out/
 *.class
+
+# Scratch & temporary development test scripts
+scratch/
 
 # Configuration with local credentials (keep local, never commit)
 config/db.properties
 
 # User-uploaded item photos and personal data
+uploads/*
+!uploads/items/
+!uploads/.gitkeep
 uploads/items/*
 !uploads/items/.gitkeep
 
-# Database backups, SQL dumps, and data exports
+# Database backups, SQL dumps, and data exports (allow sql/ migration scripts)
 *.sql
+!sql/*.sql
 *.dump
 backups/
 

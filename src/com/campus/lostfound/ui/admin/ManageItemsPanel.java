@@ -2,6 +2,7 @@ package com.campus.lostfound.ui.admin;
 
 import com.campus.lostfound.dao.ItemDAO;
 import com.campus.lostfound.models.Item;
+import com.campus.lostfound.ui.common.CampusIcons;
 import com.campus.lostfound.ui.common.ItemDetailsDialog;
 import com.campus.lostfound.ui.common.RoundedButton;
 import com.campus.lostfound.ui.common.UITheme;
@@ -16,10 +17,12 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -54,6 +57,8 @@ public class ManageItemsPanel extends JPanel {
     private JTable table;
     private DefaultTableModel tableModel;
     private JLabel statusLabel;
+    private CardLayout tableCardLayout;
+    private JPanel tableContainer;
 
     private RoundedButton updateStatusButton;
     private RoundedButton deleteButton;
@@ -163,14 +168,13 @@ public class ManageItemsPanel extends JPanel {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val, boolean isSel, boolean hasFoc, int row, int col) {
                 Component c = super.getTableCellRendererComponent(t, val, isSel, hasFoc, row, col);
-                if (!isSel) {
+                if (isSel) {
+                    c.setBackground(new Color(224, 242, 254));
+                    c.setForeground(UITheme.PRIMARY);
+                } else {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     c.setForeground(UITheme.TEXT_PRIMARY);
 
-                    if (col == 1 && val != null) {
-                        setFont(getFont().deriveFont(Font.BOLD));
-                        c.setForeground(new Color(37, 99, 235));
-                    }
                     if (col == 2 && val != null) {
                         setFont(getFont().deriveFont(Font.BOLD));
                         c.setForeground("LOST".equalsIgnoreCase(val.toString()) ? new Color(220, 38, 38) : new Color(22, 163, 74));
@@ -187,6 +191,39 @@ public class ManageItemsPanel extends JPanel {
                         setFont(getFont().deriveFont(Font.BOLD));
                     }
                 }
+
+                // Photo indicator column (index 1) - Use robust vector camera icon
+                if (col == 1) {
+                    setHorizontalAlignment(SwingConstants.CENTER);
+                    boolean hasPhoto = false;
+                    if (val instanceof Boolean) {
+                        hasPhoto = (Boolean) val;
+                    } else if (val != null) {
+                        String s = val.toString();
+                        hasPhoto = "YES".equalsIgnoreCase(s) || "📷".equals(s) || "PHOTO".equalsIgnoreCase(s);
+                    }
+                    if (hasPhoto) {
+                        setIcon(CampusIcons.get(CampusIcons.IconType.CAMERA, 16, 16, UITheme.ACCENT));
+                        setText("");
+                        setToolTipText("Photo attached");
+                    } else {
+                        setIcon(null);
+                        setText("—");
+                        setToolTipText("No photo");
+                        if (!isSel) {
+                            c.setForeground(UITheme.TEXT_MUTED);
+                        }
+                    }
+                } else {
+                    setIcon(null);
+                    setToolTipText(null);
+                    if (col == 0) {
+                        setHorizontalAlignment(SwingConstants.CENTER);
+                    } else {
+                        setHorizontalAlignment(SwingConstants.LEFT);
+                    }
+                }
+
                 return c;
             }
         });
@@ -206,6 +243,20 @@ public class ManageItemsPanel extends JPanel {
         scrollPane.getViewport().setBackground(Color.WHITE);
 
         table.getSelectionModel().addListSelectionListener(e -> updateButtonStates());
+
+        // Center card container with empty state
+        tableCardLayout = new CardLayout();
+        tableContainer = new JPanel(tableCardLayout);
+        tableContainer.setOpaque(false);
+
+        JPanel emptyStatePanel = UITheme.createEmptyStatePanel(
+                CampusIcons.IconType.BROWSE,
+                "No Items Found",
+                "No campus items match the selected search criteria or filter options."
+        );
+
+        tableContainer.add(scrollPane, "TABLE");
+        tableContainer.add(emptyStatePanel, "EMPTY");
 
         // Bottom Action Bar
         JPanel bottomPanel = new JPanel(new BorderLayout());
@@ -242,7 +293,7 @@ public class ManageItemsPanel extends JPanel {
         bottomPanel.add(buttonBar, BorderLayout.EAST);
 
         add(filterCard, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        add(tableContainer, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
@@ -288,7 +339,7 @@ public class ManageItemsPanel extends JPanel {
                     for (Item i : itemList) {
                         String dateStr = i.getReportDate() != null ? dateFormat.format(i.getReportDate()) : "N/A";
                         String reporter = i.getReporterName() != null ? i.getReporterName() : "User #" + i.getReportedBy();
-                        String photoInd = (i.getImagePath() != null && !i.getImagePath().trim().isEmpty()) ? "📷" : "—";
+                        String photoInd = (i.getImagePath() != null && !i.getImagePath().trim().isEmpty()) ? "YES" : "—";
 
                         tableModel.addRow(new Object[]{
                                 i.getItemId(),
@@ -301,6 +352,11 @@ public class ManageItemsPanel extends JPanel {
                                 reporter,
                                 dateStr
                         });
+                    }
+                    if (itemList.isEmpty()) {
+                        tableCardLayout.show(tableContainer, "EMPTY");
+                    } else {
+                        tableCardLayout.show(tableContainer, "TABLE");
                     }
                     statusLabel.setText("Total items found: " + itemList.size());
                     updateButtonStates();

@@ -2,6 +2,7 @@ package com.campus.lostfound.ui.admin;
 
 import com.campus.lostfound.dao.UserDAO;
 import com.campus.lostfound.models.User;
+import com.campus.lostfound.ui.common.CampusIcons;
 import com.campus.lostfound.ui.common.RoundedButton;
 import com.campus.lostfound.ui.common.UITheme;
 import com.campus.lostfound.utils.SessionManager;
@@ -13,10 +14,12 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -29,9 +32,9 @@ import java.util.List;
 /**
  * ManageUsersPanel
  * 
- * Allows campus administrators to review registered users, promote/demote roles,
- * and safely delete accounts with built-in protections:
- * 1. Self-protection: Admin cannot delete or demote their own account.
+ * Allows campus administrators to review registered users and safely delete
+ * accounts with built-in protections:
+ * 1. Self-protection: Admin cannot delete their own account.
  * 2. Last-admin protection: Prevents removing the last active administrator.
  * 3. Foreign key integrity: Blocks deleting users with existing item reports or claims.
  */
@@ -44,9 +47,9 @@ public class ManageUsersPanel extends JPanel {
     private JTable userTable;
     private DefaultTableModel tableModel;
     private JLabel statusLabel;
+    private CardLayout tableCardLayout;
+    private JPanel tableContainer;
 
-    private RoundedButton promoteButton;
-    private RoundedButton demoteButton;
     private RoundedButton deleteButton;
     private RoundedButton refreshButton;
 
@@ -72,7 +75,7 @@ public class ManageUsersPanel extends JPanel {
         titleLbl.setFont(UITheme.FONT_HEADER);
         titleLbl.setForeground(UITheme.PRIMARY);
 
-        JLabel infoLbl = new JLabel("(View registered campus users, elevate privileges, or manage accounts)");
+        JLabel infoLbl = new JLabel("(View registered campus users or manage accounts)");
         infoLbl.setFont(UITheme.FONT_SMALL);
         infoLbl.setForeground(UITheme.TEXT_SECONDARY);
 
@@ -102,7 +105,10 @@ public class ManageUsersPanel extends JPanel {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val, boolean isSel, boolean hasFoc, int row, int col) {
                 Component c = super.getTableCellRendererComponent(t, val, isSel, hasFoc, row, col);
-                if (!isSel) {
+                if (isSel) {
+                    c.setBackground(new Color(224, 242, 254));
+                    c.setForeground(UITheme.PRIMARY);
+                } else {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     c.setForeground(UITheme.TEXT_PRIMARY);
 
@@ -132,6 +138,20 @@ public class ManageUsersPanel extends JPanel {
 
         userTable.getSelectionModel().addListSelectionListener(e -> updateButtonStates());
 
+        // Center card container with empty state
+        tableCardLayout = new CardLayout();
+        tableContainer = new JPanel(tableCardLayout);
+        tableContainer.setOpaque(false);
+
+        JPanel emptyStatePanel = UITheme.createEmptyStatePanel(
+                CampusIcons.IconType.USERS,
+                "No Users Found",
+                "No registered user accounts match the query in the database."
+        );
+
+        tableContainer.add(scrollPane, "TABLE");
+        tableContainer.add(emptyStatePanel, "EMPTY");
+
         // Bottom Action Bar
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setOpaque(false);
@@ -143,14 +163,6 @@ public class ManageUsersPanel extends JPanel {
         JPanel buttonBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 4));
         buttonBar.setOpaque(false);
 
-        promoteButton = new RoundedButton("Promote to Admin", RoundedButton.ButtonType.PRIMARY);
-        promoteButton.setEnabled(false);
-        promoteButton.addActionListener(e -> handlePromoteUser());
-
-        demoteButton = new RoundedButton("Demote to Student", RoundedButton.ButtonType.OUTLINE);
-        demoteButton.setEnabled(false);
-        demoteButton.addActionListener(e -> handleDemoteUser());
-
         deleteButton = new RoundedButton("Delete User", RoundedButton.ButtonType.DANGER);
         deleteButton.setEnabled(false);
         deleteButton.addActionListener(e -> handleDeleteUser());
@@ -158,8 +170,6 @@ public class ManageUsersPanel extends JPanel {
         refreshButton = new RoundedButton("Refresh", RoundedButton.ButtonType.SECONDARY);
         refreshButton.addActionListener(e -> loadUsersAsync());
 
-        buttonBar.add(promoteButton);
-        buttonBar.add(demoteButton);
         buttonBar.add(deleteButton);
         buttonBar.add(refreshButton);
 
@@ -167,7 +177,7 @@ public class ManageUsersPanel extends JPanel {
         bottomPanel.add(buttonBar, BorderLayout.EAST);
 
         add(headerPanel, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        add(tableContainer, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
@@ -201,6 +211,11 @@ public class ManageUsersPanel extends JPanel {
                                 dateStr
                         });
                     }
+                    if (userList.isEmpty()) {
+                        tableCardLayout.show(tableContainer, "EMPTY");
+                    } else {
+                        tableCardLayout.show(tableContainer, "TABLE");
+                    }
                     statusLabel.setText("Total registered accounts: " + userList.size());
                     updateButtonStates();
                     if (onDataChangedCallback != null) {
@@ -224,8 +239,6 @@ public class ManageUsersPanel extends JPanel {
     private void updateButtonStates() {
         User user = getSelectedUser();
         if (user == null) {
-            promoteButton.setEnabled(false);
-            demoteButton.setEnabled(false);
             deleteButton.setEnabled(false);
             return;
         }
@@ -233,98 +246,8 @@ public class ManageUsersPanel extends JPanel {
         int currentAdminId = SessionManager.getInstance().getUserId();
         boolean isSelf = (user.getUserId() == currentAdminId);
 
-        // Cannot promote someone already ADMIN
-        promoteButton.setEnabled(user.getRole() != User.Role.ADMIN);
-
-        // Cannot demote self; can demote other admins
-        demoteButton.setEnabled(!isSelf && user.getRole() == User.Role.ADMIN);
-
         // Cannot delete self
         deleteButton.setEnabled(!isSelf);
-    }
-
-    private void handlePromoteUser() {
-        User user = getSelectedUser();
-        if (user == null || user.getRole() == User.Role.ADMIN) return;
-
-        int confirm = JOptionPane.showConfirmDialog(
-                this,
-                "Promote '" + user.getName() + "' (" + user.getEmail() + ") to ADMINISTRATOR?\n" +
-                "They will gain full access to user management, moderation, and claims.",
-                "Confirm Promotion",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE
-        );
-
-        if (confirm == JOptionPane.YES_OPTION) {
-            new SwingWorker<Boolean, Void>() {
-                @Override
-                protected Boolean doInBackground() {
-                    return userDAO.updateUserRole(user.getUserId(), User.Role.ADMIN);
-                }
-
-                @Override
-                protected void done() {
-                    try {
-                        if (get()) {
-                            JOptionPane.showMessageDialog(ManageUsersPanel.this, "User promoted to ADMIN successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                            loadUsersAsync();
-                        } else {
-                            JOptionPane.showMessageDialog(ManageUsersPanel.this, "Failed to update role.", "Error", JOptionPane.ERROR_MESSAGE);
-                        }
-                    } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(ManageUsersPanel.this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                    }
-                }
-            }.execute();
-        }
-    }
-
-    private void handleDemoteUser() {
-        User user = getSelectedUser();
-        if (user == null || user.getRole() != User.Role.ADMIN) return;
-
-        int currentAdminId = SessionManager.getInstance().getUserId();
-        if (user.getUserId() == currentAdminId) {
-            JOptionPane.showMessageDialog(this, "You cannot demote your own account.", "Action Blocked", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        // Check if this is the last admin
-        if (userDAO.countAdminUsers() <= 1) {
-            JOptionPane.showMessageDialog(this, "Cannot demote: This is the last active administrator account.", "Action Blocked", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        int confirm = JOptionPane.showConfirmDialog(
-                this,
-                "Are you sure you want to demote '" + user.getName() + "' to STUDENT?",
-                "Confirm Demotion",
-                JOptionPane.YES_NO_OPTION
-        );
-
-        if (confirm == JOptionPane.YES_OPTION) {
-            new SwingWorker<Boolean, Void>() {
-                @Override
-                protected Boolean doInBackground() {
-                    return userDAO.updateUserRole(user.getUserId(), User.Role.STUDENT);
-                }
-
-                @Override
-                protected void done() {
-                    try {
-                        if (get()) {
-                            JOptionPane.showMessageDialog(ManageUsersPanel.this, "User demoted to STUDENT.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                            loadUsersAsync();
-                        } else {
-                            JOptionPane.showMessageDialog(ManageUsersPanel.this, "Failed to update role.", "Error", JOptionPane.ERROR_MESSAGE);
-                        }
-                    } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(ManageUsersPanel.this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                    }
-                }
-            }.execute();
-        }
     }
 
     private void handleDeleteUser() {

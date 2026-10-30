@@ -2,6 +2,7 @@ package com.campus.lostfound.ui.student;
 
 import com.campus.lostfound.dao.ClaimDAO;
 import com.campus.lostfound.models.Claim;
+import com.campus.lostfound.ui.common.CampusIcons;
 import com.campus.lostfound.ui.common.RoundedButton;
 import com.campus.lostfound.ui.common.UITheme;
 import com.campus.lostfound.utils.SessionManager;
@@ -17,6 +18,7 @@ import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -40,7 +42,10 @@ public class MyClaimsPanel extends JPanel {
     private JTable table;
     private DefaultTableModel tableModel;
     private JLabel statusLabel;
+    private CardLayout tableCardLayout;
+    private JPanel tableContainer;
     private RoundedButton detailsButton;
+    private RoundedButton contactFinderButton;
     private RoundedButton refreshButton;
 
     private List<Claim> userClaims = new ArrayList<>();
@@ -94,7 +99,10 @@ public class MyClaimsPanel extends JPanel {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val, boolean isSel, boolean hasFoc, int row, int col) {
                 Component c = super.getTableCellRendererComponent(t, val, isSel, hasFoc, row, col);
-                if (!isSel) {
+                if (isSel) {
+                    c.setBackground(new Color(224, 242, 254));
+                    c.setForeground(UITheme.PRIMARY);
+                } else {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     c.setForeground(UITheme.TEXT_PRIMARY);
 
@@ -127,8 +135,30 @@ public class MyClaimsPanel extends JPanel {
         scrollPane.getViewport().setBackground(Color.WHITE);
 
         table.getSelectionModel().addListSelectionListener(e -> {
-            detailsButton.setEnabled(table.getSelectedRow() >= 0);
+            int row = table.getSelectedRow();
+            boolean hasSel = row >= 0 && row < userClaims.size();
+            detailsButton.setEnabled(hasSel);
+            if (hasSel) {
+                Claim c = userClaims.get(row);
+                contactFinderButton.setEnabled(c.getStatus() == Claim.ClaimStatus.APPROVED);
+            } else {
+                contactFinderButton.setEnabled(false);
+            }
         });
+
+        // Center card container with empty state
+        tableCardLayout = new CardLayout();
+        tableContainer = new JPanel(tableCardLayout);
+        tableContainer.setOpaque(false);
+
+        JPanel emptyStatePanel = UITheme.createEmptyStatePanel(
+                CampusIcons.IconType.MY_CLAIMS,
+                "No Claims Submitted",
+                "You haven't submitted any ownership claims yet. Browse found items to file a claim."
+        );
+
+        tableContainer.add(scrollPane, "TABLE");
+        tableContainer.add(emptyStatePanel, "EMPTY");
 
         // Bottom Action Bar
         JPanel bottomPanel = new JPanel(new BorderLayout());
@@ -141,6 +171,10 @@ public class MyClaimsPanel extends JPanel {
         JPanel buttonBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 4));
         buttonBar.setOpaque(false);
 
+        contactFinderButton = new RoundedButton("Contact Finder", RoundedButton.ButtonType.ACCENT);
+        contactFinderButton.setEnabled(false);
+        contactFinderButton.addActionListener(e -> handleContactFinder());
+
         detailsButton = new RoundedButton("View Claim Details", RoundedButton.ButtonType.OUTLINE);
         detailsButton.setEnabled(false);
         detailsButton.addActionListener(e -> handleViewDetails());
@@ -148,6 +182,7 @@ public class MyClaimsPanel extends JPanel {
         refreshButton = new RoundedButton("Refresh", RoundedButton.ButtonType.SECONDARY);
         refreshButton.addActionListener(e -> loadUserClaims());
 
+        buttonBar.add(contactFinderButton);
         buttonBar.add(detailsButton);
         buttonBar.add(refreshButton);
 
@@ -155,7 +190,7 @@ public class MyClaimsPanel extends JPanel {
         bottomPanel.add(buttonBar, BorderLayout.EAST);
 
         add(headerPanel, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        add(tableContainer, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
@@ -195,8 +230,14 @@ public class MyClaimsPanel extends JPanel {
                                 dateStr
                         });
                     }
+                    if (userClaims.isEmpty()) {
+                        tableCardLayout.show(tableContainer, "EMPTY");
+                    } else {
+                        tableCardLayout.show(tableContainer, "TABLE");
+                    }
                     statusLabel.setText("You have submitted " + userClaims.size() + " claim(s).");
                     detailsButton.setEnabled(false);
+                    contactFinderButton.setEnabled(false);
                 } catch (Exception ex) {
                     statusLabel.setText("Error loading claims: " + ex.getMessage());
                 }
@@ -238,5 +279,53 @@ public class MyClaimsPanel extends JPanel {
         );
 
         JOptionPane.showMessageDialog(this, details, "Claim Details - #" + claim.getClaimId(), JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void handleContactFinder() {
+        int row = table.getSelectedRow();
+        if (row < 0 || row >= userClaims.size()) return;
+
+        Claim claim = userClaims.get(row);
+        com.campus.lostfound.dao.ItemDAO itemDAO = new com.campus.lostfound.dao.ItemDAO();
+        com.campus.lostfound.models.Item item = itemDAO.findById(claim.getItemId());
+
+        // 1. Before approval (PENDING)
+        if (claim.getStatus() == Claim.ClaimStatus.PENDING) {
+            JOptionPane.showMessageDialog(this,
+                    "Contact details are hidden until the Admin approves the claim.",
+                    "Contact Details", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 2. After rejection or item return
+        if (claim.getStatus() == Claim.ClaimStatus.REJECTED || (item != null && item.getStatus() == com.campus.lostfound.models.Item.ItemStatus.RETURNED)) {
+            JOptionPane.showMessageDialog(this,
+                    "Contact details are no longer available.",
+                    "Contact Details", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 3. Approved claim check
+        if (claim.getStatus() != Claim.ClaimStatus.APPROVED) {
+            JOptionPane.showMessageDialog(this,
+                    "Contact details are hidden until the Admin approves the claim.",
+                    "Contact Details", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        int currentUserId = SessionManager.getInstance().getUserId();
+        com.campus.lostfound.dao.UserDAO userDAO = new com.campus.lostfound.dao.UserDAO();
+        com.campus.lostfound.models.User finder = userDAO.getAuthorizedPeerContactForItem(currentUserId, claim.getItemId());
+
+        if (finder != null) {
+            new com.campus.lostfound.ui.common.ContactDetailsDialog(
+                    javax.swing.SwingUtilities.getWindowAncestor(this),
+                    finder, item, "Verified Finder"
+            ).setVisible(true);
+        } else {
+            JOptionPane.showMessageDialog(this,
+                    "Contact details are no longer available.",
+                    "Contact Details", JOptionPane.INFORMATION_MESSAGE);
+        }
     }
 }

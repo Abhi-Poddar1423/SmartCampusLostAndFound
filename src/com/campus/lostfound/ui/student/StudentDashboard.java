@@ -18,6 +18,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -48,8 +49,12 @@ public class StudentDashboard extends JFrame {
     private ItemBrowsePanel browsePanel;
     private MyReportedItemsPanel reportedItemsPanel;
     private MyClaimsPanel claimsPanel;
+    private NotificationsPanel notificationsPanel;
 
     private JTextField topSearchField;
+    private RoundedButton refreshAllBtn;
+    private UITheme.BadgeBellButton topBellBtn;
+    private final com.campus.lostfound.dao.NotificationDAO notificationDAO = new com.campus.lostfound.dao.NotificationDAO();
 
     private final Map<String, JButton> navButtons = new HashMap<>();
     private String activeNav = "OVERVIEW";
@@ -134,6 +139,8 @@ public class StudentDashboard extends JFrame {
         sidebar.add(createNavButton("My Reported Items", CampusIcons.IconType.MY_REPORTS, "REPORTED"));
         sidebar.add(Box.createVerticalStrut(6));
         sidebar.add(createNavButton("My Claims", CampusIcons.IconType.MY_CLAIMS, "CLAIMS"));
+        sidebar.add(Box.createVerticalStrut(6));
+        sidebar.add(createNavButton("Notifications", CampusIcons.IconType.NOTICE_BELL, "NOTIFICATIONS"));
 
         sidebar.add(Box.createVerticalGlue());
 
@@ -147,6 +154,15 @@ public class StudentDashboard extends JFrame {
                 BorderFactory.createEmptyBorder(14, 0, 0, 0)
         ));
 
+        JPanel profileRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        profileRow.setOpaque(false);
+        profileRow.setAlignmentX(LEFT_ALIGNMENT);
+
+        JPanel avatar = UITheme.createInitialAvatar(studentName, 36);
+        JPanel textCol = new JPanel();
+        textCol.setLayout(new BoxLayout(textCol, BoxLayout.Y_AXIS));
+        textCol.setOpaque(false);
+
         JLabel userNameLbl = new JLabel(studentName);
         userNameLbl.setFont(UITheme.FONT_BOLD);
         userNameLbl.setForeground(UITheme.TEXT_LIGHT);
@@ -155,6 +171,18 @@ public class StudentDashboard extends JFrame {
         userRoleLbl.setFont(UITheme.FONT_SMALL);
         userRoleLbl.setForeground(new Color(148, 163, 184));
 
+        textCol.add(userNameLbl);
+        textCol.add(Box.createVerticalStrut(2));
+        textCol.add(userRoleLbl);
+
+        profileRow.add(avatar);
+        profileRow.add(textCol);
+
+        RoundedButton profileBtn = new RoundedButton("My Profile", RoundedButton.ButtonType.SECONDARY);
+        profileBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        profileBtn.setAlignmentX(LEFT_ALIGNMENT);
+        profileBtn.addActionListener(e -> new StudentProfileDialog(this).setVisible(true));
+
         RoundedButton logoutBtn = new RoundedButton("Logout", RoundedButton.ButtonType.OUTLINE);
         logoutBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         logoutBtn.setAlignmentX(LEFT_ALIGNMENT);
@@ -162,10 +190,10 @@ public class StudentDashboard extends JFrame {
         logoutBtn.setIconTextGap(8);
         logoutBtn.addActionListener(e -> handleLogout());
 
-        userCard.add(userNameLbl);
-        userCard.add(Box.createVerticalStrut(2));
-        userCard.add(userRoleLbl);
-        userCard.add(Box.createVerticalStrut(12));
+        userCard.add(profileRow);
+        userCard.add(Box.createVerticalStrut(10));
+        userCard.add(profileBtn);
+        userCard.add(Box.createVerticalStrut(8));
         userCard.add(logoutBtn);
 
         sidebar.add(userCard);
@@ -185,18 +213,20 @@ public class StudentDashboard extends JFrame {
         browsePanel = new ItemBrowsePanel();
         reportedItemsPanel = new MyReportedItemsPanel();
         claimsPanel = new MyClaimsPanel();
+        notificationsPanel = new NotificationsPanel(this::updateUnreadBadgeAsync);
 
         contentContainer.add(overviewPanel, "OVERVIEW");
         contentContainer.add(browsePanel, "BROWSE");
         contentContainer.add(reportedItemsPanel, "REPORTED");
         contentContainer.add(claimsPanel, "CLAIMS");
+        contentContainer.add(notificationsPanel, "NOTIFICATIONS");
 
         // Top Action Bar
         JPanel topStrip = new JPanel(new BorderLayout(14, 0));
         topStrip.setBackground(Color.WHITE);
         topStrip.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER),
-                BorderFactory.createEmptyBorder(10, 24, 10, 24)
+                BorderFactory.createEmptyBorder(12, 24, 12, 24)
         ));
 
         // Left section of toolbar: Search field
@@ -219,20 +249,24 @@ public class StudentDashboard extends JFrame {
         searchBox.add(searchIcon);
         searchBox.add(topSearchField);
 
-        // Right section of toolbar: Refresh and + Report Item
+        // Right section of toolbar: Notifications Bell, Refresh and + Report Item
         JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         rightActions.setOpaque(false);
 
-        RoundedButton refreshAllBtn = new RoundedButton("Refresh", RoundedButton.ButtonType.OUTLINE);
-        refreshAllBtn.setPreferredSize(new Dimension(105, 36));
+        topBellBtn = new UITheme.BadgeBellButton();
+        topBellBtn.addActionListener(e -> switchView("NOTIFICATIONS"));
+
+        refreshAllBtn = new RoundedButton("Refresh Data", RoundedButton.ButtonType.OUTLINE);
+        refreshAllBtn.setPreferredSize(new Dimension(130, 36));
         refreshAllBtn.setIcon(CampusIcons.get(CampusIcons.IconType.REFRESH, 14, 14, UITheme.PRIMARY));
-        refreshAllBtn.setIconTextGap(6);
+        refreshAllBtn.setIconTextGap(8);
         refreshAllBtn.addActionListener(e -> refreshActiveView());
 
         RoundedButton quickReportBtn = new RoundedButton("+ Report Item", RoundedButton.ButtonType.ACCENT);
         quickReportBtn.setPreferredSize(new Dimension(145, 36));
         quickReportBtn.addActionListener(e -> openReportDialog());
 
+        rightActions.add(topBellBtn);
         rightActions.add(refreshAllBtn);
         rightActions.add(quickReportBtn);
 
@@ -247,6 +281,7 @@ public class StudentDashboard extends JFrame {
         add(centerPanel, BorderLayout.CENTER);
 
         updateNavSelection("OVERVIEW");
+        updateUnreadBadgeAsync();
     }
 
     private void executeTopSearch() {
@@ -272,6 +307,22 @@ public class StudentDashboard extends JFrame {
         btn.setIconTextGap(12);
         btn.setBorder(BorderFactory.createEmptyBorder(8, 14, 8, 12));
 
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                if (!viewKey.equals(activeNav)) {
+                    btn.setBackground(new Color(28, 56, 86));
+                }
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                if (!viewKey.equals(activeNav)) {
+                    btn.setBackground(UITheme.BG_SIDEBAR);
+                }
+            }
+        });
+
         btn.addActionListener(e -> switchView(viewKey));
 
         navButtons.put(viewKey, btn);
@@ -292,6 +343,18 @@ public class StudentDashboard extends JFrame {
         btn.setIcon(CampusIcons.get(iconType, 18, 18, UITheme.ACCENT_LIGHT));
         btn.setIconTextGap(12);
         btn.setBorder(BorderFactory.createEmptyBorder(8, 14, 8, 12));
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                btn.setBackground(new Color(28, 56, 86));
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                btn.setBackground(UITheme.BG_SIDEBAR);
+            }
+        });
 
         btn.addActionListener(e -> action.run());
         return btn;
@@ -338,7 +401,11 @@ public class StudentDashboard extends JFrame {
             case "CLAIMS":
                 claimsPanel.refreshClaims();
                 break;
+            case "NOTIFICATIONS":
+                notificationsPanel.refreshNotifications();
+                break;
         }
+        updateUnreadBadgeAsync();
     }
 
     private void openReportDialog() {
@@ -348,6 +415,37 @@ public class StudentDashboard extends JFrame {
             reportedItemsPanel.refreshItems();
         });
         dialog.setVisible(true);
+    }
+
+    private void updateUnreadBadgeAsync() {
+        int userId = SessionManager.getInstance().getUserId();
+        if (userId <= 0) return;
+
+        new SwingWorker<Integer, Void>() {
+            @Override
+            protected Integer doInBackground() {
+                return notificationDAO.getUnreadCount(userId);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    int unread = get();
+                    JButton notifNavBtn = navButtons.get("NOTIFICATIONS");
+                    if (notifNavBtn != null) {
+                        if (unread > 0) {
+                            notifNavBtn.setText("Notifications (" + unread + ")");
+                        } else {
+                            notifNavBtn.setText("Notifications");
+                        }
+                    }
+
+                    if (topBellBtn != null) {
+                        topBellBtn.setUnreadCount(unread);
+                    }
+                } catch (Exception ignored) { }
+            }
+        }.execute();
     }
 
     private void handleLogout() {

@@ -36,7 +36,8 @@ public class CampusIcons {
         NOTICE_BELL,
         CALENDAR,
         EYE,
-        EYE_OFF
+        EYE_OFF,
+        CAMERA
     }
 
     public static Icon get(IconType type) {
@@ -80,7 +81,14 @@ public class CampusIcons {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
             g2.translate(x, y);
-            g2.setColor(color != null ? color : c.getForeground());
+            Color drawCol = (color != null) ? color : (c != null ? c.getForeground() : Color.BLACK);
+            if (c instanceof RoundedButton) {
+                RoundedButton rb = (RoundedButton) c;
+                if (rb.getButtonType() == RoundedButton.ButtonType.OUTLINE && (rb.isHovered() || rb.isPressed())) {
+                    drawCol = UITheme.ACCENT;
+                }
+            }
+            g2.setColor(drawCol);
 
             float stroke = Math.max(1.5f, width / 11.0f);
             g2.setStroke(new BasicStroke(stroke, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
@@ -282,6 +290,24 @@ public class CampusIcons {
                     eyeOff.closePath();
                     g2.draw(eyeOff);
                     g2.draw(new Line2D.Double(w * 0.20, h * 0.80, w * 0.80, h * 0.20));
+                    break;
+
+                case CAMERA:
+                    // Modern vector camera
+                    int camW = (int)(w * 0.78);
+                    int camH = (int)(h * 0.56);
+                    int camX = (w - camW) / 2;
+                    int camY = (int)(h * 0.36);
+                    g2.draw(new RoundRectangle2D.Double(camX, camY, camW, camH, 3, 3));
+                    // Lens circle
+                    int lr = (int)(camH * 0.26);
+                    g2.draw(new Ellipse2D.Double(w / 2.0 - lr, camY + camH / 2.0 - lr, lr * 2, lr * 2));
+                    // Flash / top viewfinder bump
+                    int bumpW = (int)(camW * 0.36);
+                    int bumpH = (int)(h * 0.14);
+                    int bumpX = (w - bumpW) / 2;
+                    int bumpY = camY - bumpH;
+                    g2.draw(new RoundRectangle2D.Double(bumpX, bumpY, bumpW, bumpH + 2, 2, 2));
                     break;
             }
 

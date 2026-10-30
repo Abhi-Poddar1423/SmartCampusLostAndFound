@@ -1,7 +1,10 @@
 package com.campus.lostfound.ui.common;
 
+import com.campus.lostfound.dao.UserDAO;
 import com.campus.lostfound.models.Item;
+import com.campus.lostfound.models.User;
 import com.campus.lostfound.utils.ImageUtil;
+import com.campus.lostfound.utils.SessionManager;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -9,6 +12,7 @@ import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -131,7 +135,13 @@ public class ItemDetailsDialog extends JDialog {
         }
 
         if (!hasImage) {
-            imageLabel.setText("<html><center style='color:#94A3B8;'><b>No Photo</b><br>Available</center></html>");
+            imageLabel.setIcon(CampusIcons.get(CampusIcons.IconType.CAMERA, 48, 48, new Color(148, 163, 184)));
+            imageLabel.setText("No Photo Available");
+            imageLabel.setFont(UITheme.FONT_SMALL);
+            imageLabel.setForeground(new Color(148, 163, 184));
+            imageLabel.setVerticalTextPosition(SwingConstants.BOTTOM);
+            imageLabel.setHorizontalTextPosition(SwingConstants.CENTER);
+            imageLabel.setIconTextGap(8);
         }
 
         photoPanel.add(imageLabel, BorderLayout.CENTER);
@@ -204,7 +214,11 @@ public class ItemDetailsDialog extends JDialog {
         JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 12));
         footerPanel.setBackground(UITheme.BG_MAIN);
 
-        RoundedButton closeBtn = new RoundedButton("Close", RoundedButton.ButtonType.PRIMARY);
+        RoundedButton contactBtn = new RoundedButton("Contact Finder / Owner", RoundedButton.ButtonType.ACCENT);
+        contactBtn.addActionListener(e -> handleContactAction());
+        footerPanel.add(contactBtn);
+
+        RoundedButton closeBtn = new RoundedButton("Close", RoundedButton.ButtonType.SECONDARY);
         closeBtn.addActionListener(e -> dispose());
         footerPanel.add(closeBtn);
 
@@ -270,6 +284,48 @@ public class ItemDetailsDialog extends JDialog {
             viewer.setVisible(true);
         } catch (Exception ex) {
             System.err.println("[ItemDetailsDialog] Error opening full image: " + ex.getMessage());
+        }
+    }
+
+    private void handleContactAction() {
+        int currentUserId = SessionManager.getInstance().getUserId();
+        if (currentUserId <= 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Please log in to contact student peers.",
+                    "Login Required", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // 1. If item is RETURNED
+        if (item.getStatus() == Item.ItemStatus.RETURNED) {
+            JOptionPane.showMessageDialog(this,
+                    "Contact details are no longer available.",
+                    "Contact Details", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        UserDAO userDAO = new UserDAO();
+        User peer = userDAO.getAuthorizedPeerContactForItem(currentUserId, item.getItemId());
+        if (peer != null) {
+            String role = (item.getItemType() == Item.ItemType.FOUND && item.getReportedBy() == peer.getUserId())
+                    ? "Verified Finder"
+                    : "Approved Owner";
+            new ContactDetailsDialog(this, peer, item, role).setVisible(true);
+            return;
+        }
+
+        // Check if there is an approved claim or rejected or pending
+        com.campus.lostfound.dao.ClaimDAO claimDAO = new com.campus.lostfound.dao.ClaimDAO();
+        com.campus.lostfound.models.Claim claim = claimDAO.getLatestClaimForItem(item.getItemId());
+
+        if (claim != null && claim.getStatus() == com.campus.lostfound.models.Claim.ClaimStatus.REJECTED) {
+            JOptionPane.showMessageDialog(this,
+                    "Contact details are no longer available.",
+                    "Contact Details", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this,
+                    "Contact details are hidden until the Admin approves the claim.",
+                    "Contact Details", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 }

@@ -38,6 +38,13 @@ public class User {
     private Role role;
     private Timestamp createdAt;
 
+    // Student profile extension fields (Feature 8)
+    private String rollNumber;
+    private String department;
+    private String semester;
+    private String phoneNumber;
+    private boolean phonePublic = false;
+
     // Default constructor
     public User() {
         this.role = Role.STUDENT;
@@ -108,6 +115,46 @@ public class User {
 
     public void setCreatedAt(Timestamp createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getRollNumber() {
+        return rollNumber;
+    }
+
+    public void setRollNumber(String rollNumber) {
+        this.rollNumber = rollNumber;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    public String getSemester() {
+        return semester;
+    }
+
+    public void setSemester(String semester) {
+        this.semester = semester;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public boolean isPhonePublic() {
+        return phonePublic;
+    }
+
+    public void setPhonePublic(boolean phonePublic) {
+        this.phonePublic = phonePublic;
     }
 
     public boolean isAdmin() {

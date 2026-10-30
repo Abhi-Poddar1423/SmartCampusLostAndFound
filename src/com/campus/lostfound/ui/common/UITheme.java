@@ -3,19 +3,28 @@ package com.campus.lostfound.ui.common;
 import com.formdev.flatlaf.FlatLightLaf;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.Icon;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.UIManager;
 import javax.swing.border.Border;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 /**
  * UITheme
@@ -212,5 +221,190 @@ public class UITheme {
                 g2.dispose();
             }
         };
+    }
+
+    /**
+     * Standard empty state panel with icon, title, and descriptive subtitle.
+     */
+    public static JPanel createEmptyStatePanel(CampusIcons.IconType iconType, String title, String subtitle) {
+        JPanel emptyPanel = new JPanel();
+        emptyPanel.setLayout(new BoxLayout(emptyPanel, BoxLayout.Y_AXIS));
+        emptyPanel.setOpaque(false);
+        emptyPanel.setBorder(BorderFactory.createEmptyBorder(60, 24, 60, 24));
+        emptyPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        if (iconType != null) {
+            JLabel iconLabel = new JLabel(CampusIcons.get(iconType, 44, 44, new Color(203, 213, 225)));
+            iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            emptyPanel.add(iconLabel);
+            emptyPanel.add(Box.createVerticalStrut(14));
+        }
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(FONT_HEADER);
+        titleLabel.setForeground(TEXT_PRIMARY);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel subLabel = new JLabel(subtitle);
+        subLabel.setFont(FONT_REGULAR);
+        subLabel.setForeground(TEXT_SECONDARY);
+        subLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        emptyPanel.add(titleLabel);
+        emptyPanel.add(Box.createVerticalStrut(6));
+        emptyPanel.add(subLabel);
+
+        return emptyPanel;
+    }
+
+    /**
+     * Creates an initials avatar circle for sidebar profile cards.
+     */
+    public static JPanel createInitialAvatar(String fullName, int size) {
+        String initials = "U";
+        if (fullName != null && !fullName.trim().isEmpty()) {
+            String[] parts = fullName.trim().split("\\s+");
+            if (parts.length == 1) {
+                initials = parts[0].substring(0, Math.min(2, parts[0].length())).toUpperCase();
+            } else {
+                initials = ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+            }
+        }
+        final String text = initials;
+        JPanel avatar = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+                int w = getWidth();
+                int h = getHeight();
+
+                // Outer circle
+                g2.setColor(ACCENT);
+                g2.fillOval(1, 1, w - 2, h - 2);
+
+                // Subtle border
+                g2.setColor(new Color(255, 255, 255, 90));
+                g2.setStroke(new java.awt.BasicStroke(1.5f));
+                g2.drawOval(1, 1, w - 2, h - 2);
+
+                // Initials
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, (int)(size * 0.42)));
+                FontMetrics fm = g2.getFontMetrics();
+                int tx = (w - fm.stringWidth(text)) / 2;
+                int ty = (h + fm.getAscent() - fm.getDescent()) / 2;
+                g2.drawString(text, tx, ty);
+
+                g2.dispose();
+            }
+        };
+        avatar.setOpaque(false);
+        avatar.setPreferredSize(new Dimension(size, size));
+        avatar.setMaximumSize(new Dimension(size, size));
+        avatar.setMinimumSize(new Dimension(size, size));
+        return avatar;
+    }
+
+    /**
+     * Interactive notification bell button with unread count pill badge.
+     */
+    public static class BadgeBellButton extends JButton {
+        private int unreadCount = 0;
+        private boolean isHovered = false;
+
+        public BadgeBellButton() {
+            setPreferredSize(new Dimension(42, 36));
+            setFocusPainted(false);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setOpaque(false);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setToolTipText("View Notifications");
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    isHovered = true;
+                    repaint();
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    isHovered = false;
+                    repaint();
+                }
+            });
+        }
+
+        public void setUnreadCount(int count) {
+            this.unreadCount = count;
+            if (count > 0) {
+                setToolTipText("You have " + count + " unread notification" + (count == 1 ? "" : "s"));
+            } else {
+                setToolTipText("View Notifications");
+            }
+            repaint();
+        }
+
+        public int getUnreadCount() {
+            return unreadCount;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            int w = getWidth();
+            int h = getHeight();
+
+            // Background & border
+            g2.setColor(isHovered ? new Color(241, 245, 249) : Color.WHITE);
+            g2.fillRoundRect(0, 0, w, h, 8, 8);
+            g2.setColor(BORDER);
+            g2.drawRoundRect(0, 0, w - 1, h - 1, 8, 8);
+
+            // Bell icon
+            Icon bell = CampusIcons.get(CampusIcons.IconType.NOTICE_BELL, 18, 18, unreadCount > 0 ? ACCENT : PRIMARY);
+            int iconX = (w - bell.getIconWidth()) / 2;
+            int iconY = (h - bell.getIconHeight()) / 2;
+            bell.paintIcon(this, g2, iconX, iconY);
+
+            // Badge pill
+            if (unreadCount > 0) {
+                String badgeText = unreadCount > 99 ? "99+" : String.valueOf(unreadCount);
+                Font badgeFont = new Font("Segoe UI", Font.BOLD, 10);
+                g2.setFont(badgeFont);
+                FontMetrics fm = g2.getFontMetrics();
+
+                int pad = 5;
+                int textW = fm.stringWidth(badgeText);
+                int badgeW = Math.max(16, textW + pad * 2);
+                int badgeH = 15;
+                int badgeX = w - badgeW - 3;
+                int badgeY = 3;
+
+                // Red pill
+                g2.setColor(DANGER);
+                g2.fillRoundRect(badgeX, badgeY, badgeW, badgeH, badgeH, badgeH);
+
+                // White pill border
+                g2.setColor(Color.WHITE);
+                g2.setStroke(new java.awt.BasicStroke(1.2f));
+                g2.drawRoundRect(badgeX, badgeY, badgeW, badgeH, badgeH, badgeH);
+
+                // Text
+                g2.setColor(Color.WHITE);
+                int tx = badgeX + (badgeW - textW) / 2;
+                int ty = badgeY + (badgeH + fm.getAscent() - fm.getDescent()) / 2;
+                g2.drawString(badgeText, tx, ty);
+            }
+
+            g2.dispose();
+        }
     }
 }
